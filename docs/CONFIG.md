@@ -1,7 +1,7 @@
 # Configuration reference
 
 Two things are configurable: the per-bot config files, and what `install.sh`
-writes into `~/.claude/settings.json`.
+writes for each detected agent.
 
 ## `bots/<name>.conf`
 
@@ -64,17 +64,47 @@ Two shapes, treated differently:
 Widen it if you mount a home directory. Datasets, virtualenvs, and container
 layers are the usual additions.
 
-## What `install.sh` writes to `~/.claude/settings.json`
+## What `install.sh` writes, per adapter
 
-Backed up to `settings.json.botkit-bak` before the first change. That backup is
-written **once** and never overwritten, so it always holds the genuine
-pre-botkit state, which is what `uninstall.sh` restores. A
-`settings.json.botkit-prev` is refreshed on every run for same-day mistakes.
+`install.sh` does not know about any specific agent. It sources every file in
+`lib/agents/` except `generic.sh`, detects which agents are present, and asks
+each adapter to apply itself. `generic.sh` always runs: it writes `~/dev/AGENTS.md`.
+`--agent <name>` forces one adapter plus the generic layer.
 
-If `jq` is missing, the installer says so and exits. It will not do text surgery
-on your JSON.
+Adding an agent is adding a file to `lib/agents/`. It must not require editing
+`install.sh`.
 
-### The hook
+A written rule in `AGENTS.md` is an instruction the agent may ignore. A hook or
+a deny rule is enforced. The install report says which is which. Do not treat
+them as equivalent.
+
+### Generic (`lib/agents/generic.sh`)
+
+Writes `~/dev/AGENTS.md` from `templates/AGENTS.md` on first install and **never
+overwrites** the parts you edit. If the template later changes and yours differs
+outside the markers, it writes `~/dev/AGENTS.md.new` alongside it and tells you
+to diff them.
+
+The marked block is regenerated on every `install.sh` and every `bot up`:
+
+```markdown
+<!-- botkit:begin generated -->
+...mount paths, per-bot exclusion lists, unslop, enforcement...
+<!-- botkit:end generated -->
+```
+
+Replace only what is between the markers. If they are absent, they are appended.
+
+### Claude Code (`lib/agents/claude.sh`)
+
+**Context.** `~/dev/CLAUDE.md` as a symlink to `AGENTS.md`, because Claude Code
+does not read `AGENTS.md`. If `CLAUDE.md` already exists as a real file, it is
+left alone and you are told to merge by hand.
+
+**Skills.** Copied to `~/.claude/skills/<name>/`. Provenance:
+`~/.claude/skills/.botkit-provenance`.
+
+**Hook.** Merged into `~/.claude/settings.json`:
 
 ```json
 {
@@ -89,13 +119,15 @@ on your JSON.
 }
 ```
 
-Re-running the installer matches the existing entry by its command path and
-replaces it, so entries never stack up. Other hooks in your settings are left
-alone.
+Backed up to `settings.json.botkit-bak` before the first change. That backup is
+written **once** and never overwritten, so it always holds the genuine
+pre-botkit state, which is what `uninstall.sh` restores. A
+`settings.json.botkit-prev` is refreshed on every run for same-day mistakes.
 
-### The search exclusions
+Re-running matches the existing entry by its command path and replaces it, so
+entries never stack up. Other hooks in your settings are left alone.
 
-Each `SEARCH_EXCLUDE` entry becomes a `Read` deny rule under
+**Exclusions.** Each `SEARCH_EXCLUDE` entry becomes a `Read` deny rule under
 `permissions.deny`, anchored with `//` at the filesystem root:
 
 | Config entry | Generated rule |
@@ -110,8 +142,8 @@ the file-reading Bash commands Claude Code recognises. `Glob(path)` and
 those instead would look right and do nothing.
 
 They do **not** cover arbitrary subprocesses. A Python script or a hand-rolled
-`find` that reads those paths is not stopped by anything here. That is why the
-README also tells agents not to search them.
+`find` that reads those paths is not stopped by anything here. That is why
+`AGENTS.md` also tells agents not to search them.
 
 **Ownership by prefix.** JSON has no comments, so botkit claims every deny entry
 beginning with `Read(//<mount point>/` and rewrites exactly those on each run.
@@ -120,6 +152,84 @@ for other paths is safe.
 
 These are written on install and again on every `bot up`, from the same function,
 so the config and the settings cannot drift apart.
+
+**Plugin.** `claude plugin marketplace add mattpocock/skills` and
+`claude plugin install mattpocock-skills@mattpocock`. Skip with `--no-plugins`.
+
+### Cursor (`lib/agents/cursor.sh`)
+
+**Context.** `~/dev/AGENTS.md`. Cursor reads it.
+
+**Skills.** Copied to `~/.cursor/skills/<name>/`. Provenance:
+`~/.cursor/skills/.botkit-provenance`. Independent of Claude's copy. Uninstalling
+one agent does not touch the other.
+
+**Hook.** Merged into `~/.cursor/hooks.json`:
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [{ "command": "<botkit>/hooks/unslop-gate.sh" }]
+  }
+}
+```
+
+Cursor's `postToolUse` accepts `additional_context` on stdout, which is how the
+unslop nudge reaches the model. `afterFileEdit` is the file-edit event, but it
+documents no output fields, so it cannot deliver the nudge. The hook script
+emits both Claude's `hookSpecificOutput.additionalContext` and Cursor's
+`additional_context`.
+
+Backed up the same way as `settings.json`: `hooks.json.botkit-bak` once,
+`hooks.json.botkit-prev` every run.
+
+**Exclusions.** Not a Cursor capability. A `.cursorignore` inside `~/dev/<bot>/`
+would land on the robot's disk, which is forbidden. The global ignore list in
+Cursor user settings replaces the default list rather than merging with it, so
+writing it would drop the built-in `.env` and key ignores. Those paths are
+listed in `AGENTS.md` instead, and the capability report says `written down`.
+
+### Codex (`lib/agents/codex.sh`)
+
+**Context.** `~/dev/AGENTS.md`. Codex reads it when the session is rooted there.
+`~/.codex/AGENTS.md` is left alone so robot rules do not leak into other
+projects.
+
+**Skills.** Copied to `~/.agents/skills/<name>/`. Provenance:
+`~/.agents/skills/.botkit-provenance`. Independent of Claude's and Cursor's
+copies.
+
+**Hook.** Merged into `~/.codex/hooks.json`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|apply_patch",
+        "hooks": [{ "type": "command", "command": "<botkit>/hooks/unslop-gate.sh" }]
+      }
+    ]
+  }
+}
+```
+
+Codex file edits go through `apply_patch`. The matcher aliases `Edit` and
+`Write` still match that tool. The hook script pulls paths from
+`*** Add File:` / `*** Update File:` lines in `tool_input.command`. Codex reads
+Claude's `hookSpecificOutput.additionalContext` field.
+
+Backed up the same way: `hooks.json.botkit-bak` once, `hooks.json.botkit-prev`
+every run.
+
+Codex skips the hook until you trust it. Run `/hooks` in a Codex session after
+install.
+
+**Exclusions.** Not a Codex capability. A permission profile in `config.toml`
+would replace the user's `sandbox_mode` rather than adding denials beside it.
+A project `.codex/` inside `~/dev/<bot>/` would land on the robot. Those paths
+are listed in `AGENTS.md` instead, and the capability report says `written down`.
 
 ### `~/.claude/botkit-unslop.conf`
 
@@ -144,8 +254,5 @@ BOTKIT_EXCLUDES+=( vendor third_party '*.ipynb' )
 To change which files count as prose at all, edit `INCLUDE_GLOBS` and
 `EXCLUDE_GLOBS` at the top of `hooks/unslop-gate.sh`.
 
-## `~/dev/CLAUDE.md`
-
-Copied from `templates/CLAUDE.md` on first install and **never overwritten**. If
-the template later changes and yours differs, the installer writes
-`~/dev/CLAUDE.md.new` alongside it and tells you to diff them.
+If `jq` is missing, the installer says so and exits. It will not do text surgery
+on your JSON.

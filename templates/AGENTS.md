@@ -1,8 +1,8 @@
 # ~/dev working rules
 
-Start Claude Code from `~/dev`, never from a repo below it. Rooting here is what
+Start the agent from `~/dev`, never from a repo below it. Rooting here is what
 lets one session see both `notes/<repo>/` and the mounted robot source without
-`--add-dir`.
+adding directories by hand.
 
 ## Layout
 
@@ -35,9 +35,9 @@ entries into dated summaries instead of letting it grow forever.
 under `~/dev/<bot>/` lands on the robot's disk, where teammates see it. No notes,
 no scratch files, no agent output. Notes go in `~/dev/notes/`, always.
 
-**Never search the paths in that bot's `SEARCH_EXCLUDE`:** build, install, log,
-`.ros`, bags, weights. They are denied in settings, and going around the denial
-with a Bash `find` or `rg` is the same mistake made deliberately.
+**Never search the paths listed for that bot in the generated block below.**
+Going around a deny rule or a written exclusion with a `find` or `rg` is the
+same mistake, made on purpose.
 
 **Builds and launches go through `bot run <name> -- <cmd>` or `bot build
 <name>`.** This laptop cannot build robot code and should not try.
@@ -79,3 +79,6 @@ layout and search-cost numbers it reports, choose, and record the reason in
 The agent, the credential, the skills, and every config live on this laptop. The
 robots are shared machines and stay clean. Do not install anything on one, do not
 write config to one, and do not touch its git clone, `.gitignore`, or users.
+
+<!-- botkit:begin generated -->
+<!-- botkit:end generated -->

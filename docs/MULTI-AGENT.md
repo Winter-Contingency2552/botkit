@@ -1,17 +1,8 @@
 # Making botkit work with any agent
 
-A work spec. Hand this to an agent in this repo and it should be able to do the
-job without asking what any of the pieces are.
-
-## Goal
-
-botkit currently assumes Claude Code. The shell tooling does not, but the
-installer does, and every piece of enforcement it configures is written in
-Claude Code's formats. Change that so botkit works with any coding agent, gives
-each one as much enforcement as it genuinely supports, and says plainly which
-parts are enforced and which are only written down.
-
-Do not remove any Claude Code capability while doing it.
+botkit works with any coding agent. Each one gets as much enforcement as it
+genuinely supports. The install report says which parts are enforced and which
+are only written down. Claude Code keeps everything it had.
 
 ## What already works with any agent
 
@@ -19,22 +10,24 @@ None of this needs changing. It is plain shell and plain files.
 
 | Piece | Why it is neutral |
 |---|---|
-| `scripts/bot` | shell, ssh, sshfs. No agent involved. |
+| `scripts/bot` | shell, ssh, sshfs. `bot up` also regenerates AGENTS.md and refreshes per-agent exclusions. |
 | `bots/*.conf` | shell key/value. |
 | `~/dev/notes/` and `templates/notes-repo/` | markdown in a git repo. |
 | `lib/common.sh` mount and ssh helpers | shell. |
 | The notes contract | a convention, not a mechanism. |
 
-## What is Claude-specific today
+## What used to be Claude-specific
 
-| Piece | Current mechanism | Lives in |
+These now go through adapters. Claude Code still has all of them.
+
+| Piece | Mechanism | Adapter |
 |---|---|---|
-| Instructions file | `~/dev/CLAUDE.md` | `install.sh`, `templates/CLAUDE.md` |
-| Skills, botkit's own and fetched | copied to `~/.claude/skills/<name>/` only | `install.sh`, `skills/` |
-| unslop nudge | `PostToolUse` hook in `~/.claude/settings.json` | `install.sh`, `hooks/unslop-gate.sh` |
-| Search exclusions | `permissions.deny` `Read(...)` rules in `settings.json` | `lib/common.sh` `write_search_denies` |
-| Plugin install | `claude plugin marketplace add` | `install.sh` |
-| Preflight | requires the `claude` binary | `install.sh` `DEPENDENCIES` |
+| Instructions file | `~/dev/AGENTS.md`, plus `CLAUDE.md` symlink | generic.sh, claude.sh |
+| Skills | copied to each agent's skills directory | claude.sh, cursor.sh, codex.sh |
+| unslop nudge | Claude `PostToolUse`, Cursor `postToolUse`, Codex `PostToolUse` | all three, via `hooks/unslop-gate.sh` |
+| Search exclusions | Claude `Read(...)` deny rules; Cursor and Codex written into AGENTS.md | claude.sh, generic.sh |
+| Plugin install | `claude plugin marketplace add` | claude.sh |
+| Preflight | `sshfs jq git ssh`; agents detected separately | install.sh |
 
 ## Verified facts
 
@@ -71,21 +64,40 @@ Do not re-derive them, and do not guess at a path that is not listed here.**
   format botkit already installs, so the skill files copy across unchanged.**
 - Hooks: `~/.cursor/hooks.json` for user level, `.cursor/hooks.json` for
   project level. Shape is `{"version": 1, "hooks": {"afterFileEdit": [{"command": "..."}]}}`.
-- The file-edit hook event is **`afterFileEdit`**, not `PostToolUse`.
+- The file-edit hook event is **`afterFileEdit`**. It has no documented output
+  fields, so it cannot inject context. Cursor **`postToolUse`** does: output
+  `{"additional_context": "..."}`. That is the event the Cursor adapter uses.
 - `afterFileEdit` input: `{"file_path": "<absolute path>", "edits": [{"old_string": "...", "new_string": "..."}]}`.
   The path is at the **top level**, not under `tool_input`.
+- `disable-model-invocation: true` is a documented Cursor frontmatter key.
+  Skills so marked are only included when explicitly invoked.
 - Exclusions: `.cursorignore` in the project root, gitignore syntax. It blocks
   Agent, Tab, Inline Edit, and `@` mentions. **It does not block the terminal or
   MCP server tools**, which is the same limitation Claude's deny rules have.
 
-### Codex (NOT verified, check before using)
+### Codex (verified)
 
-- Config lives at `~/.codex/config.toml` and it supports lifecycle hooks.
-- It reads `AGENTS.md`.
-- The exact hook event names, payload shape, and config keys were **not**
-  confirmed. Verify against `https://developers.openai.com/codex/config-reference`
-  before writing this adapter. If you cannot confirm them, ship Codex as a
-  generic agent instead of inventing a config format.
+- Reads `AGENTS.md` in the project (and nested directories). Also reads
+  `~/.codex/AGENTS.md` as global instructions. botkit does **not** write the
+  global file: that would inject robot rules into every Codex session, including
+  ones that are not rooted at `~/dev`.
+- Personal skills: `~/.agents/skills/<name>/SKILL.md`. Repo skills would be
+  `.agents/skills/` inside the project; botkit does not write that into a mount.
+- Hook config: `~/.codex/hooks.json` (user level). Shape matches Claude:
+  `{"hooks": {"PostToolUse": [{"matcher": "...", "hooks": [{"type": "command", "command": "..."}]}]}}`.
+  Do not put a project `.codex/` inside `~/dev/<bot>/`.
+- Hooks are on by default. Non-managed command hooks are skipped until the user
+  trusts them with `/hooks`.
+- File edits go through `apply_patch`. `matcher` values `apply_patch`, `Edit`,
+  and `Write` all match that tool; hook input still reports
+  `tool_name: "apply_patch"`. The edited path is **not** at `.tool_input.file_path`.
+  It is inside `.tool_input.command`, as `*** Update File:` / `*** Add File:`
+  lines in the patch.
+- Hook output: `{"hookSpecificOutput": {"hookEventName": "PostToolUse",
+  "additionalContext": "..."}}`. Same field Claude uses.
+- Exclusions: Codex permission profiles (`default_permissions` plus
+  `[permissions.*.filesystem]`) do not compose with `sandbox_mode`. Setting
+  `default_permissions` would replace the user's sandbox. No profile is written.
 
 ### How the above was verified
 
@@ -97,11 +109,15 @@ curl -sfL https://cursor.com/docs/rules
 curl -sfL https://cursor.com/docs/skills
 curl -sfL https://cursor.com/docs/hooks
 curl -sfL https://cursor.com/docs/reference/ignore-file
+curl -sfL https://developers.openai.com/codex/hooks
+curl -sfL https://developers.openai.com/codex/skills
+curl -sfL https://developers.openai.com/codex/guides/agents-md
+curl -sfL https://developers.openai.com/codex/concepts/customization
 ```
 
 ## The design
 
-An adapter layer. `install.sh` stops knowing about any specific agent and asks
+An adapter layer. `install.sh` does not know about any specific agent and asks
 adapters instead.
 
 ```
@@ -109,9 +125,10 @@ lib/agents/
   generic.sh   always applied, to every agent, including ones nobody wrote an adapter for
   claude.sh
   cursor.sh
+  codex.sh
 ```
 
-Each adapter defines these four functions. `install.sh` sources one adapter at a
+Each adapter defines these functions. `install.sh` sources one adapter at a
 time and calls them.
 
 ```bash
@@ -119,6 +136,7 @@ agent_label          # human name, e.g. "Claude Code"
 agent_detect         # exit 0 if this agent is present on the machine
 agent_capabilities   # print any of: context skills hooks exclusions
 agent_apply          # do the work. Must be idempotent.
+agent_revert         # uninstall.sh, per agent
 ```
 
 Rules for the layer:
@@ -133,25 +151,21 @@ Rules for the layer:
 - `install.sh --agent <name>` forces a specific adapter. With no flag, it detects
   and configures every agent it finds.
 
-## Work items
+## What was built
 
-### 1. AGENTS.md becomes the real instructions file
+### 1. AGENTS.md is the instructions file
 
-Rename `templates/CLAUDE.md` to `templates/AGENTS.md` and strip the Claude Code
-specific wording from it. Install it to `~/dev/AGENTS.md`.
+`templates/AGENTS.md` installs to `~/dev/AGENTS.md`. The Claude adapter creates
+`~/dev/CLAUDE.md` as a symlink to `AGENTS.md`. If `CLAUDE.md` already exists as
+a real file, it is left alone and the install report tells you to merge by hand.
 
-The Claude adapter then creates `~/dev/CLAUDE.md` as a symlink to `AGENTS.md`,
-because Claude Code does not read `AGENTS.md`.
-
-Keep the existing non-clobber behaviour: if `~/dev/AGENTS.md` already exists and
-differs from the template, write `AGENTS.md.new` beside it and say so. Never
-overwrite. If `~/dev/CLAUDE.md` already exists as a real file rather than a
-symlink, leave it alone and tell the user to merge it by hand.
+Non-clobber: if `~/dev/AGENTS.md` already exists and differs from the template
+outside the markers, write `AGENTS.md.new` beside it and say so. Never
+overwrite the user-edited part.
 
 ### 2. A regenerated block inside AGENTS.md
 
-Folded rules have to be refreshed when bots change, without destroying anything
-the user wrote. Use markers:
+Markers:
 
 ```markdown
 <!-- botkit:begin generated -->
@@ -159,135 +173,70 @@ the user wrote. Use markers:
 <!-- botkit:end generated -->
 ```
 
-Replace only what is between the markers. If they are absent, append them. This
-block holds the rules an agent cannot enforce mechanically:
+`regenerate_agents_md` in `lib/common.sh` replaces only what is between the
+markers. If they are absent, it appends them. `install.sh` and `bot up` both
+call it. The block lists mount paths, per-bot exclusion lists, the unslop
+instruction, and which of those are enforced on each applied agent.
 
-- the actual mount paths, listed
-- the actual excluded paths per bot, listed, since without deny rules the agent
-  needs to be told what not to search
-- the instruction to apply unslop to prose, for any agent with no hook support
-- a line naming which of these are enforced on this agent and which are not
+### 3. The hook script speaks three dialects
 
-`install.sh` and `bot up` both regenerate it, from one shared function in
-`lib/common.sh`, the same way `write_search_denies` and `write_unslop_conf`
-already work.
+`hooks/unslop-gate.sh` reads `.tool_input.file_path`, `.tool_input.path`, or
+`.file_path`, and for Codex `apply_patch` it also parses
+`*** Add File:` / `*** Update File:` lines out of `.tool_input.command`.
 
-### 3. The hook script speaks both dialects
-
-`hooks/unslop-gate.sh` currently reads `.tool_input.file_path`. Make it accept
-either shape:
-
-```bash
-path="$(jq -r 'try (.tool_input.file_path // .file_path) // empty')"
-```
-
-Keep the existing behaviour that it exits 0 on every path, including bad input
-and a missing `jq`. Confirm what Cursor's `afterFileEdit` accepts as output
-before emitting Claude's `hookSpecificOutput` shape to it. See open questions.
+On a match it emits both Claude's `hookSpecificOutput.additionalContext` and
+Cursor's `additional_context`. Codex uses the Claude-shaped field. It still
+exits 0 on every path, including bad input and a missing `jq`.
 
 ### 4. The Cursor adapter
 
-Capabilities: `context skills hooks exclusions`, minus hooks if the open
-question below resolves against it.
+Capabilities: `context skills hooks`. Exclusions are not in the list.
 
-- Skills: copy the same `SKILL.md` directories into `~/.cursor/skills/<name>/`.
-- Hook: merge into `~/.cursor/hooks.json` with `jq`, same
-  read-modify-write-atomically approach as `settings_json_edit`, matching and
-  replacing any existing botkit entry by its command path so re-running never
-  stacks duplicates.
-- Exclusions: write `.cursorignore` in the mount point. **Check this against the
-  rule that botkit never writes to a mount.** A `.cursorignore` inside
-  `~/dev/<bot>/` would land on the robot's disk, which is forbidden. If Cursor
-  has no user-level ignore file that works from outside the mount, this
-  capability must be dropped and folded into `AGENTS.md` instead. Do not break
-  the no-writes-to-the-robot rule to gain an ignore file.
+- Skills: copy into `~/.cursor/skills/<name>/`.
+- Hook: merge into `~/.cursor/hooks.json` as `postToolUse`, matching and
+  replacing any existing botkit entry by its command path.
+- Exclusions: folded into `AGENTS.md`. See resolved questions below.
 
-### 5. botkit's own skills install to every agent
+### 5. The Codex adapter
 
-botkit ships its own skills in `skills/`. Today that is `wiring`, and more will
-follow. They currently install only to `~/.claude/skills/`.
+Capabilities: `context skills hooks`. Exclusions are not in the list.
 
-Two facts make this mostly mechanical:
+- Skills: copy into `~/.agents/skills/<name>/`.
+- Hook: merge into `~/.codex/hooks.json` as `PostToolUse`, matcher
+  `Write|Edit|apply_patch`, matching and replacing any existing botkit entry by
+  its command path. The install report tells you to trust it with `/hooks`.
+- Exclusions: folded into `AGENTS.md`. No `config.toml` is written.
 
-- **`wiring` has no harness-specific content.** It references `bot run`,
-  `bot status`, and paths under `~/dev/notes/`, all of which are agent-neutral.
-  Verified by grep: no mention of Claude, `settings.json`, hooks, or any tool
-  name.
-- **Claude Code and Cursor both take a directory containing `SKILL.md`, and both
-  derive the skill's identity from the directory name**, not from the frontmatter
-  `name`. So the same directory copies to both unchanged.
+### 6. botkit's own skills install to every agent
 
-What to build:
+Every directory under `skills/` that contains `SKILL.md` is staged, then copied
+to each skills-capable agent. Adding a second folder under `skills/` installs
+it with no edit to `install.sh`. Fetched pstack and robotics skills go to the
+same agents. Provenance is per-agent: `.botkit-provenance` lives inside that
+agent's skills directory.
 
-- Each adapter that reports the `skills` capability installs from
-  `$SKILLS_SRC_DIR` into that agent's own skills directory. One loop, one source.
-- The third-party skills botkit fetches, the three pstack ones and the five
-  robotics ones, are the same `SKILL.md` format and go to every skills-capable
-  agent too. Do not special-case botkit's own skills against the fetched ones.
-- **Provenance becomes per-agent.** `.botkit-provenance` currently lives at
-  `~/.claude/skills/.botkit-provenance`. Write one inside each agent's skills
-  directory instead, so `uninstall.sh` can reverse each agent independently. One
-  agent's provenance file must never drive deletions in another agent's
-  directory.
+`disable-model-invocation: true` is documented for Cursor as well as Claude
+Code. Codex does not document that key. Recorded in `docs/SKILLS.md`.
 
-### Writing a new custom skill so it stays portable
+### 7. Preflight no longer requires claude
 
-This part is for whoever adds the next skill, not just for this port.
+`DEPENDENCIES` is `sshfs jq git ssh`. Agents are detected separately. No known
+agent is a warning, not an error.
 
-- **The directory name is the invocation name on both harnesses.** Choose it
-  deliberately. In Claude Code, the frontmatter `name` is only a display label
-  for personal skills; the command comes from the directory.
-- **Stick to three frontmatter keys.** Across all nine currently installed
-  skills, only `name`, `description`, and `disable-model-invocation` appear.
-  Anything else risks being ignored or rejected by one harness.
-- **`disable-model-invocation: true` is verified for Claude Code and unverified
-  for Cursor.** Two installed skills rely on it, `blast-radius` and `bro`, to
-  stay by-name-only. If a new skill must never fire on its own, confirm Cursor
-  honours the key before depending on it, and record the answer in
-  `docs/SKILLS.md` either way.
-- **Never name a harness in the skill body.** Write `bot run <name> -- ros2 node
-  list`, not "use the Bash tool to run". `wiring` is the model to copy: it tells
-  the agent what to run and what to conclude, and never how its own harness
-  works.
-- **Keep it self-contained.** A skill must not assume a hook fired, a setting was
-  written, or another skill ran first. The harnesses differ in exactly those
-  places.
+### 8. The capability report
 
-### 6. Preflight stops requiring claude
+Printed at the end of the run. A rule written into `AGENTS.md` is an
+instruction the agent may ignore. A hook or a deny rule is enforced. The report
+says so in words, not only in the table.
 
-`DEPENDENCIES` becomes `sshfs jq git ssh`. Then detect agents separately. If no
-known agent is found, that is a warning and not an error: install everything
-neutral, write `AGENTS.md`, and say which agents were looked for.
+### 9. uninstall.sh reverses all of it
 
-### 7. The capability report
+Per agent, using `agent_revert`. `--agent NAME` reverts one adapter.
+`~/dev/notes/` is not touched. `~/dev/AGENTS.md` is not touched.
 
-At the end of the run, print a table. This is the part the user specifically
-asked for, so do not reduce it to a single line.
+### 10. Docs
 
-```
-Agent          Context      Skills   Hook     Exclusions
-Claude Code    CLAUDE.md    9        enforced enforced
-Cursor         AGENTS.md    9        enforced written down
-Unknown agent  AGENTS.md    -        -        written down
-```
-
-State plainly, in words and not just in a table, that a rule written into
-`AGENTS.md` is an instruction the agent may ignore, while a hook or a deny rule
-is enforced by the harness. They are not equivalent and the report must not
-imply they are.
-
-### 8. uninstall.sh reverses all of it
-
-Per agent, using the same adapters. It already refuses to touch `~/dev/notes/`,
-and that must stay true.
-
-### 9. Docs
-
-- `docs/SKILLS.md`: per-agent install locations.
-- `docs/CONFIG.md`: what each adapter writes, and where.
-- `docs/SETUP.md`: the per-agent restart or reload step.
-- `README.md`: stop implying Claude Code is required.
-- This file: update it as things get built, rather than leaving it as a plan.
+`docs/SKILLS.md`, `docs/CONFIG.md`, `docs/SETUP.md`, `README.md`, and this file.
 
 ## The rule that must hold
 
@@ -297,19 +246,28 @@ enforced one. The install report and the docs both have to be honest about which
 is which, because someone will otherwise assume a deny rule is protecting them
 when only a sentence is.
 
-## Open questions
+## Resolved questions
 
-**Can Cursor's `afterFileEdit` return context to the agent?** Claude's
-`PostToolUse` supports `hookSpecificOutput.additionalContext`, which is how the
-unslop nudge reaches the model. The only Cursor hook output contract found so far
-was `{"permission": "allow" | "deny"}`, on a different event. If `afterFileEdit`
-cannot inject context, the unslop nudge cannot work as a hook on Cursor and must
-fold into `AGENTS.md`. Resolve this at `https://cursor.com/docs/hooks` before
-building work item 4.
+**Can Cursor's `afterFileEdit` return context to the agent?** No documented
+output fields. Cursor's `postToolUse` does document `additional_context`, so
+the Cursor adapter registers that event instead of `afterFileEdit`. The unslop
+nudge is a hook on Cursor, not folded into `AGENTS.md`.
 
-**Does a user-level Cursor ignore file exist?** Needed to keep work item 4 from
-writing into a mount. The docs mention a global ignore list in user settings.
-Find out whether it is reachable from a config file rather than only the GUI.
+**Does a user-level Cursor ignore file exist that we can write without touching
+a mount?** `.cursorignore` is project-root only. Putting one inside
+`~/dev/<bot>/` would write to the robot. `cursor.general.globalCursorIgnoreList`
+in user settings replaces the default list rather than merging, so writing it
+would drop the built-in `.env` and key ignores. Exclusions are therefore not a
+Cursor capability and are listed in `AGENTS.md` as written down.
+
+**Codex.** Confirmed against the hooks, skills, and AGENTS.md docs. Skills go
+to `~/.agents/skills`. The unslop hook is `PostToolUse` in `~/.codex/hooks.json`,
+matching `Write|Edit|apply_patch`. File edits send the patch in
+`tool_input.command`, so the gate parses `*** Add File:` / `*** Update File:`
+lines. Exclusions stay in `AGENTS.md`: a permission profile would hijack
+`sandbox_mode`, and a project `.codex/` inside a mount would land on the robot.
+`~/.codex/AGENTS.md` is not written, so robot rules do not leak into unrelated
+Codex sessions. The hook does nothing until you trust it with `/hooks`.
 
 ## Acceptance checks, offline
 
@@ -323,6 +281,9 @@ touches the real home directory.
    and the `Read(...)` deny rules.
 4. With Cursor installed, `~/.cursor/skills/` gets the same 9 skill directories,
    botkit's own `wiring` among them.
+4b. With Codex installed (or `./install.sh --agent codex`), `~/.agents/skills/`
+    gets those same directories, and `~/.codex/hooks.json` has the PostToolUse
+    entry. Uninstalling `--agent codex` leaves Claude and Cursor alone.
 5. Adding a second directory under `skills/` installs it to every skills-capable
    agent with no edit to `install.sh`.
 6. Each agent's skills directory has its own `.botkit-provenance`, and
@@ -345,10 +306,10 @@ offline, against a sandboxed `HOME`, because no robot was available. Everything
 below is unverified against hardware. Treat a failure here as a real bug in
 botkit, not as a mistake in the test.
 
-Run the whole list once on Claude Code, then again on Cursor. The point of the
-second pass is that the `bot` toolchain is supposed to be harness-neutral, so
-every result should be identical except where the capability table says
-otherwise.
+Run the whole list once on Claude Code, then again on Cursor, then on Codex if
+you have it. The point of the extra passes is that the `bot` toolchain is
+supposed to be harness-neutral, so every result should be identical except
+where the capability table says otherwise.
 
 Set up first:
 
@@ -404,7 +365,7 @@ cp bots/example.conf bots/mybot.conf   # set BOT_HOST and BOT_USER, leave REMOTE
     written down, note what actually happened. That difference is the whole point
     of the capability table.
 15. **Nothing landed on the robot.** After all of the above:
-    `ssh <user>@<host> 'ls -la ~; ls -la ~/.claude ~/.cursor 2>/dev/null'`.
+    `ssh <user>@<host> 'ls -la ~; ls -la ~/.claude ~/.cursor ~/.codex ~/.agents 2>/dev/null'`.
     There must be no agent config, no notes, no botkit files. This is the
     constraint the whole project exists to protect, so check it last and check it
     properly.

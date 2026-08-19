@@ -101,8 +101,10 @@ cmd_up() {
 
     seed_notes "$name"
 
-    write_search_denies "$MOUNT_POINT" "$SEARCH_EXCLUDE"
-    ok "search exclusions applied for $MOUNT_POINT"
+    select_agents
+    apply_generic_agent
+    apply_selected_agents
+
     write_unslop_conf
 
     printf '%s\n' "$MOUNT_POINT"

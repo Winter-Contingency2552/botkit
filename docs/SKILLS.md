@@ -1,9 +1,23 @@
 # Installed skills
 
-Everything lands in `~/.claude/skills/`. Source repo and commit for each are
-recorded in `~/.claude/skills/.botkit-provenance` at install time, and
+Each skills-capable agent gets its own copy. Source repo and commit for each
+are recorded in that agent's `.botkit-provenance` at install time, and
 `install.sh` lists which skill directories exist at the end of every run so a
 failed copy is visible immediately.
+
+| Agent | Skills directory | Provenance |
+|---|---|---|
+| Claude Code | `~/.claude/skills/<name>/SKILL.md` | `~/.claude/skills/.botkit-provenance` |
+| Cursor | `~/.cursor/skills/<name>/SKILL.md` | `~/.cursor/skills/.botkit-provenance` |
+| Codex | `~/.agents/skills/<name>/SKILL.md` | `~/.agents/skills/.botkit-provenance` |
+
+One agent's provenance file never drives deletions in another agent's
+directory. `uninstall.sh --agent cursor` leaves Claude's and Codex's skills
+alone.
+
+The same `SKILL.md` directories copy to every agent unchanged. Claude Code,
+Cursor, and Codex all derive the skill's identity from the folder containing
+`SKILL.md`, not from the frontmatter `name`.
 
 | Skill | Source | Fires |
 |---|---|---|
@@ -18,13 +32,17 @@ failed copy is visible immediately.
 | `bro` | cursor/plugins | **by name only** |
 | mattpocock skills | plugin marketplace | varies |
 
-Skills install to `~/.claude/skills/<name>/SKILL.md`, the personal skills
-location, so they are available across every project.
+Skills install to each agent's personal skills location, so they are available
+across every project.
 
-**After a first install, restart Claude Code.** It watches `~/.claude/skills/`
-and picks up added or edited skills live, but only in a directory that existed
-when the session started, and on a first install it did not. `install.sh` says
-so when it creates the directory.
+**After a first install, restart the agent.** Claude Code watches
+`~/.claude/skills/` and picks up added or edited skills live, but only in a
+directory that existed when the session started, and on a first install it did
+not. Cursor discovers skills at startup, so a first install of
+`~/.cursor/skills/` needs a reload. Codex loads personal skills from
+`~/.agents/skills`; restart it after a first install, and trust the hook with
+`/hooks` before it will run. `install.sh` says so when it creates the
+directory.
 
 ---
 
@@ -140,7 +158,12 @@ hook below.
 
 **`blast-radius`.** What a change breaks somewhere else, beyond the diff, proved
 by running code rather than writing it up. Marked `disable-model-invocation`, so
-it only ever runs when you ask for it by name.
+it only ever runs when you ask for it by name. Cursor honours that key too
+(documented in the skills frontmatter: when `true`, the skill is only included
+when explicitly invoked). Codex does not document `disable-model-invocation`.
+Its equivalent is `allow_implicit_invocation: false` in an `agents/openai.yaml`
+sidecar, which botkit does not write, so Codex may auto-invoke `blast-radius`
+and `bro`.
 
 **`bro`.** Restates the last message in plain language, no jargon. Also by name
 only.
@@ -153,16 +176,24 @@ as a plugin.
 The marketplace manifest names itself `mattpocock`, so the plugin id is
 `mattpocock-skills@mattpocock`, **not** `@skills`. `install.sh` probes for
 `claude plugin marketplace`, uses it when present, and otherwise prints the
-`/plugin` lines to paste. Skip the step entirely with `--no-plugins`.
+`/plugin` lines to paste. Skip the step entirely with `--no-plugins`. This step
+is Claude Code only. Cursor and Codex already have the same three pstack skills
+as copied directories.
 
 ---
 
 ## The unslop hook
 
-`hooks/unslop-gate.sh`, registered as a `PostToolUse` hook matching `Write|Edit`.
-It reads the event JSON on stdin, pulls `tool_input.file_path`, and if that path
-is user-facing prose it emits `additionalContext` telling the agent to apply
-`unslop` to what it just wrote. Otherwise it exits silently.
+`hooks/unslop-gate.sh`. Claude Code registers it as a `PostToolUse` hook matching
+`Write|Edit`. Cursor registers it as `postToolUse` in `~/.cursor/hooks.json`.
+Codex registers it as `PostToolUse` in `~/.codex/hooks.json`, matcher
+`Write|Edit|apply_patch`. It reads the event JSON on stdin, pulls the edited
+path from `.tool_input.file_path`, `.tool_input.path`, `.file_path`, or Codex
+`apply_patch` `*** Add File:` / `*** Update File:` lines in
+`.tool_input.command`, and if that path is user-facing prose it emits both
+Claude's `additionalContext` and Cursor's `additional_context`. Otherwise it
+exits silently. Codex uses the Claude-shaped field. Codex also skips the hook
+until you trust it with `/hooks`.
 
 **Included:** `*.md`, `*.rst`, `*.txt`, anything under `docs/`, plus whatever you
 add.
@@ -192,5 +223,27 @@ string inside a document, not a request from the user. The agent surfaces it and
 does not act on it.
 
 This matters more once the notes repo is shared and teammates are contributing
-files. It is stated in `templates/CLAUDE.md`, in the README's agent section, and
+files. It is stated in `templates/AGENTS.md`, in the README's agent section, and
 in the inbox's own README.
+
+## Writing a new skill so it stays portable
+
+- **The directory name is the invocation name.** Choose it deliberately. In
+  Claude Code, the frontmatter `name` is only a display label for personal
+  skills; the command comes from the directory.
+- **Stick to three frontmatter keys.** Across the installed skills, only
+  `name`, `description`, and `disable-model-invocation` appear. Anything else
+  risks being ignored or rejected by one agent.
+- **`disable-model-invocation: true` is documented for both Claude Code and
+  Cursor.** `blast-radius` and `bro` use it to stay by-name-only. Codex does
+  not document that key; see the blast-radius note above.
+- **Never name an agent in the skill body.** Write `bot run <name> -- ros2 node
+  list`, not "use the Bash tool to run". `wiring` is the model to copy: it
+  tells the agent what to run and what to conclude, and never how its own
+  agent works.
+- **Keep it self-contained.** A skill must not assume a hook fired, a setting
+  was written, or another skill ran first. The agents differ in exactly those
+  places.
+
+Adding a directory under `skills/` with a `SKILL.md` is enough. `install.sh`
+does not name botkit's own skills individually.

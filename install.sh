@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # botkit installer. Idempotent: re-running upgrades scripts and skills, and
-# never overwrites ~/dev/CLAUDE.md or anything under ~/dev/notes/.
+# never overwrites ~/dev/AGENTS.md or anything under ~/dev/notes/.
 #
 # Ubuntu + bash. No macOS, no zsh.
 
@@ -23,29 +23,29 @@ ROBOTICS_REPO='https://github.com/arpitg1304/robotics-agent-skills'
 ROBOTICS_COMMIT='f9bc5467ff9ee3d23f1a1b0b29a649843bb6ad11'
 ROBOTICS_SKILLS=(ros2 robot-bringup robot-perception robotics-testing ros2-web-integration)
 
-# The marketplace manifest names itself "mattpocock", so the plugin id is
-# mattpocock-skills@mattpocock -- not @skills.
-MP_SOURCE='mattpocock/skills'
-MP_MARKETPLACE='mattpocock'
-MP_PLUGIN='mattpocock-skills@mattpocock'
-
-DEPENDENCIES=(sshfs jq git ssh claude)
+DEPENDENCIES=(sshfs jq git ssh)
 
 # ----------------------------------------------------------------- flags ----
 
 DO_PLUGINS=1
 DO_SKILLS=1
 DRY_RUN=0
+FORCE_AGENT=''
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --no-plugins) DO_PLUGINS=0 ;;
         --no-skills)  DO_SKILLS=0 ;;
         --dry-run)    DRY_RUN=1 ;;
+        --agent)
+            [[ -n ${2:-} ]] || die "--agent needs a name"
+            FORCE_AGENT="$2"
+            shift ;;
         -h|--help)
             cat <<'USAGE'
 usage: ./install.sh [options]
 
+  --agent NAME   configure only this adapter (plus the generic layer)
   --no-plugins   skip the mattpocock marketplace plugin step
   --no-skills    skip all third-party skill downloads (offline install)
   --dry-run      report what would change, change nothing
@@ -55,21 +55,6 @@ USAGE
     esac
     shift
 done
-
-CHANGED=()
-MANUAL=()
-note_change() { CHANGED+=("$1"); }
-note_manual() { MANUAL+=("$1"); }
-
-# A single place to ask "am I allowed to touch the disk". Each step detects and
-# reports its own state first, then calls this.
-acting() {
-    if (( DRY_RUN )); then
-        printf '  %swould%s %s\n' "$C_YELLOW" "$C_RESET" "$1"
-        return 1
-    fi
-    return 0
-}
 
 # ------------------------------------------------------------- preflight ----
 
@@ -92,15 +77,12 @@ preflight() {
                 jq)     warn "missing jq     — install with: sudo apt install jq" ;;
                 git)    warn "missing git    — install with: sudo apt install git" ;;
                 ssh)    warn "missing ssh    — install with: sudo apt install openssh-client" ;;
-                claude) warn "missing claude — install Claude Code: https://claude.com/claude-code" ;;
                 *)      warn "missing $cmd" ;;
             esac
         done
         die "install the commands above and re-run"
     fi
 
-    # jq in particular is load-bearing: the settings merge refuses to do text
-    # surgery on JSON without it.
     step "Checking PATH"
     case ":$PATH:" in
         *":$BIN_DIR:"*) ok "$BIN_DIR is on PATH" ;;
@@ -112,29 +94,6 @@ preflight() {
 }
 
 # ------------------------------------------------------------- workspace ----
-
-install_claude_md() {
-    step "Installing ~/dev/CLAUDE.md"
-    local src="$TEMPLATES_DIR/CLAUDE.md" dst="$DEV_DIR/CLAUDE.md"
-
-    acting "create $DEV_DIR" && mkdir -p -- "$DEV_DIR"
-
-    if [[ ! -f $dst ]]; then
-        acting "write $dst" || return 0
-        cp -- "$src" "$dst"
-        ok "wrote $dst"
-        note_change "created ~/dev/CLAUDE.md"
-    elif cmp -s -- "$src" "$dst"; then
-        skip "~/dev/CLAUDE.md is current"
-    else
-        # Never clobber. It may have been edited on purpose.
-        acting "write $dst.new (yours differs from the template)" || return 0
-        cp -- "$src" "$dst.new"
-        warn "~/dev/CLAUDE.md differs from the template — wrote ~/dev/CLAUDE.md.new instead"
-        note_change "wrote ~/dev/CLAUDE.md.new (yours was left alone)"
-        note_manual "diff ~/dev/CLAUDE.md ~/dev/CLAUDE.md.new  and merge what you want"
-    fi
-}
 
 init_notes() {
     step "Setting up ~/dev/notes"
@@ -197,53 +156,38 @@ install_bot() {
 
 # ---------------------------------------------------------------- skills ----
 
-PROV_LINES=()
-
-# Copy one skill directory into ~/.claude/skills, replacing any previous copy.
-# Returns 0 if the skill changed on disk, 3 if it was already identical,
-# 1 if it could not be installed at all.
-copy_skill() {
-    local name="$1" src="$2" before after
-    [[ $name =~ ^[A-Za-z0-9_-]+$ ]] || die "refusing to install skill with odd name: $name"
-    [[ -d $src ]] || { warn "skill '$name' not found at $src — skipped"; return 1; }
-    before="$(dir_hash "$SKILLS_DIR/$name")"
-    rm -rf -- "${SKILLS_DIR:?}/$name"
-    cp -R -- "$src" "$SKILLS_DIR/$name" || { warn "failed to copy skill $name"; return 1; }
-    after="$(dir_hash "$SKILLS_DIR/$name")"
-    [[ $before == "$after" ]] && return 3
-    return 0
-}
-
-# One place to turn a copy_skill result into output and a change record.
-report_skill() {
-    local rc="$1" name="$2" source="$3" commit="$4"
+stage_one_skill() {
+    local name="$1" src="$2" source="$3" commit="$4"
+    copy_skill_to "$BOTKIT_SKILLS_STAGE" "$name" "$src"
+    local rc=$?
     case "$rc" in
-        0) ok "$name"; note_change "installed skill: $name" ;;
-        3) skip "$name is up to date" ;;
-        *) return 1 ;;
+        0|3) PROV_LINES+=("$name	$source	$commit") ;;
     esac
-    PROV_LINES+=("$name	$source	$commit")
     return 0
 }
 
-install_wiring() {
-    step "Installing the wiring skill"
-    acting "copy skills/wiring -> $SKILLS_DIR/wiring" || return 0
-    mkdir -p -- "$SKILLS_DIR"
-    copy_skill wiring "$SKILLS_SRC_DIR/wiring"
-    report_skill "$?" wiring "botkit (this repo)" local
+stage_own_skills() {
+    # Every directory under skills/ is staged. Adding a skill is adding a
+    # folder; install.sh does not name them individually.
+    local src name
+    step "Staging botkit's own skills"
+    acting "copy $SKILLS_SRC_DIR -> stage" || return 0
+    mkdir -p -- "$BOTKIT_SKILLS_STAGE"
+    shopt -s nullglob
+    for src in "$SKILLS_SRC_DIR"/*/; do
+        [[ -f "$src/SKILL.md" ]] || continue
+        name="$(basename -- "$src")"
+        stage_one_skill "$name" "$src" "botkit (this repo)" local
+        ok "$name"
+    done
+    shopt -u nullglob
 }
 
-install_pstack_skills() {
-    step "Installing pstack skills (${PSTACK_SKILLS[*]})"
-    # These are Cursor plugin skills, not a Claude Code marketplace, so there is
-    # no plugin install path. They are portable SKILL.md directories, so copying
-    # them is the whole job.
+stage_pstack_skills() {
+    step "Staging pstack skills (${PSTACK_SKILLS[*]})"
     acting "clone $PSTACK_REPO and copy ${PSTACK_SKILLS[*]}" || return 0
 
     local tmp; tmp="$(mktemp -d)" || die "mktemp -d failed"
-    # shellcheck disable=SC2064  # expand tmp now, not at trap time
-    trap "rm -rf -- '$tmp'" RETURN
 
     local dir="$tmp/plugins"
     if git clone --depth 1 --filter=blob:none --sparse -q -- "$PSTACK_REPO" "$dir" 2>/dev/null &&
@@ -254,30 +198,27 @@ install_pstack_skills() {
     else
         warn "could not clone $PSTACK_REPO — skipping pstack skills"
         note_manual "pstack skills not installed. Re-run install.sh when you have network."
+        rm -rf -- "$tmp"
         return 0
     fi
 
     local commit; commit="$(git -C "$dir" rev-parse HEAD 2>/dev/null)"
-    mkdir -p -- "$SKILLS_DIR"
+    mkdir -p -- "$BOTKIT_SKILLS_STAGE"
 
     local name
     for name in "${PSTACK_SKILLS[@]}"; do
-        copy_skill "$name" "$dir/pstack/skills/$name"
-        report_skill "$?" "$name" "$PSTACK_REPO" "$commit"
+        stage_one_skill "$name" "$dir/pstack/skills/$name" "$PSTACK_REPO" "$commit"
+        ok "$name"
     done
+    rm -rf -- "$tmp"
 }
 
-install_robotics_skills() {
-    step "Installing robotics skills (${ROBOTICS_SKILLS[*]})"
+stage_robotics_skills() {
+    step "Staging robotics skills (${ROBOTICS_SKILLS[*]})"
     acting "fetch $ROBOTICS_REPO at $ROBOTICS_COMMIT and run its installer" || return 0
 
     local tmp; tmp="$(mktemp -d)" || die "mktemp -d failed"
-    # shellcheck disable=SC2064
-    trap "rm -rf -- '$tmp'" RETURN
-
     local dir="$tmp/robotics"
-    # Fetch exactly the pinned commit rather than cloning a branch, so the pin
-    # is what is downloaded, not just what is checked out afterwards.
     if ! ( git init -q -- "$dir" &&
            git -C "$dir" remote add origin "$ROBOTICS_REPO" &&
            git -C "$dir" fetch -q --depth 1 origin "$ROBOTICS_COMMIT" &&
@@ -288,228 +229,183 @@ install_robotics_skills() {
                git -C "$dir" checkout -q "$ROBOTICS_COMMIT" ) 2>/dev/null; then
             warn "could not fetch $ROBOTICS_REPO — skipping robotics skills"
             note_manual "robotics skills not installed. Re-run install.sh when you have network."
+            rm -rf -- "$tmp"
             return 0
         fi
     fi
 
-    # The pin is a security control, so verify it rather than assuming it.
     local head; head="$(git -C "$dir" rev-parse HEAD 2>/dev/null)"
     [[ $head == "$ROBOTICS_COMMIT" ]] ||
         die "robotics repo checked out $head, expected the audited $ROBOTICS_COMMIT — refusing to install"
 
-    mkdir -p -- "$SKILLS_DIR"
+    mkdir -p -- "$BOTKIT_SKILLS_STAGE"
 
-    # The upstream installer copies unconditionally, so hash each skill before
-    # and after to find out what genuinely changed.
-    local name
-    declare -A before=()
-    for name in "${ROBOTICS_SKILLS[@]}"; do before[$name]="$(dir_hash "$SKILLS_DIR/$name")"; done
-
-    if bash "$dir/install.sh" --target "$SKILLS_DIR" --skills "${ROBOTICS_SKILLS[@]}" >/dev/null; then
+    if bash "$dir/install.sh" --target "$BOTKIT_SKILLS_STAGE" --skills "${ROBOTICS_SKILLS[@]}" >/dev/null; then
+        local name
         for name in "${ROBOTICS_SKILLS[@]}"; do
-            if [[ "${before[$name]}" == "$(dir_hash "$SKILLS_DIR/$name")" ]]; then
-                report_skill 3 "$name" "$ROBOTICS_REPO" "$ROBOTICS_COMMIT"
+            if [[ -d "$BOTKIT_SKILLS_STAGE/$name" ]]; then
+                PROV_LINES+=("$name	$ROBOTICS_REPO	$ROBOTICS_COMMIT")
+                ok "$name"
             else
-                report_skill 0 "$name" "$ROBOTICS_REPO" "$ROBOTICS_COMMIT"
+                warn "$name is MISSING after the robotics installer ran"
             fi
         done
     else
         warn "the robotics repo's installer failed"
         note_manual "robotics skills not installed. Re-run install.sh."
     fi
+    rm -rf -- "$tmp"
 }
 
-install_plugins() {
-    step "Installing mattpocock skills"
+# ---------------------------------------------------------------- report ----
 
-    if (( ! DO_PLUGINS )); then
-        skip "--no-plugins given"
-        return 0
-    fi
+print_capability_report() {
+    local id label context skills hook excl n
 
-    local paste="/plugin marketplace add $MP_SOURCE
-  /plugin install $MP_PLUGIN"
-
-    acting "claude plugin marketplace add $MP_SOURCE; claude plugin install $MP_PLUGIN" || return 0
-
-    # Probe for the non-interactive path rather than assuming a flag exists.
-    if ! claude plugin marketplace --help >/dev/null 2>&1; then
-        warn "this claude build has no 'plugin marketplace' subcommand"
-        note_manual "paste into a Claude Code session:
-  $paste"
-        return 0
-    fi
-
-    if claude plugin marketplace add "$MP_SOURCE" >/dev/null 2>&1 ||
-       claude plugin marketplace list 2>/dev/null | grep -q "$MP_MARKETPLACE"; then
-        ok "marketplace $MP_MARKETPLACE"
-    else
-        warn "could not add the $MP_SOURCE marketplace"
-        note_manual "paste into a Claude Code session:
-  $paste"
-        return 0
-    fi
-
-    if claude plugin install "$MP_PLUGIN" -y --scope user >/dev/null 2>&1; then
-        ok "$MP_PLUGIN"
-        note_change "installed plugin: $MP_PLUGIN"
-    else
-        warn "could not install $MP_PLUGIN non-interactively"
-        note_manual "paste into a Claude Code session:
-  /plugin install $MP_PLUGIN"
-    fi
-}
-
-# The provenance file is what uninstall.sh reads to decide what it may remove,
-# so it has to describe everything botkit currently has installed -- not just
-# what this run happened to touch. A run with --no-skills must not erase the
-# record of skills installed by an earlier run, or uninstall would orphan them.
-write_provenance() {
-    acting "write $PROVENANCE" || return 0
-
-    local -A handled=()
-    local line name
-    for line in ${PROV_LINES[@]+"${PROV_LINES[@]}"}; do
-        handled["${line%%$'\t'*}"]=1
-    done
-
-    local -a kept=()
-    if [[ -f $PROVENANCE ]]; then
-        while IFS= read -r line; do
-            [[ -z $line || $line == \#* ]] && continue
-            name="${line%%$'\t'*}"
-            # Drop what this run rewrote, and anything no longer on disk.
-            [[ -n ${handled[$name]:-} ]] && continue
-            [[ -d "$SKILLS_DIR/$name" ]] || continue
-            kept+=("$line")
-        done < "$PROVENANCE"
-    fi
-
-    (( ${#kept[@]} + ${#PROV_LINES[@]} )) || return 0
-
-    mkdir -p -- "$SKILLS_DIR"
-    {
-        printf '# Installed by botkit. Last updated %s\n' "$(date -Iseconds)"
-        printf '# skill\tsource\tcommit\n'
-        printf '%s\n' ${kept[@]+"${kept[@]}"} ${PROV_LINES[@]+"${PROV_LINES[@]}"}
-    } > "$PROVENANCE"
-}
-
-report_skills() {
-    step "Skills present in $SKILLS_DIR"
-    local expected=(wiring "${PSTACK_SKILLS[@]}" "${ROBOTICS_SKILLS[@]}") name
-    for name in "${expected[@]}"; do
-        if [[ -f "$SKILLS_DIR/$name/SKILL.md" ]]; then
-            ok "$name"
+    printf '\n%sCapability report%s\n\n' "$C_BOLD" "$C_RESET"
+    printf '%-14s %-12s %-8s %-14s %s\n' Agent Context Skills Hook Exclusions
+    for id in ${APPLIED_AGENTS[@]+"${APPLIED_AGENTS[@]}"}; do
+        label="${AGENT_LABEL[$id]}"
+        context="${AGENT_CONTEXT[$id]}"
+        if agent_has_cap "$id" skills && [[ -n ${AGENT_SKILLS_PATHS[$id]:-} ]]; then
+            n="$(count_skill_dirs "${AGENT_SKILLS_PATHS[$id]}")"
+            skills="$n"
         else
-            warn "$name is MISSING"
+            skills='-'
+        fi
+        if agent_has_cap "$id" hooks; then
+            hook='enforced'
+        else
+            hook='written down'
+        fi
+        if agent_has_cap "$id" exclusions; then
+            excl='enforced'
+        else
+            excl='written down'
+        fi
+        printf '%-14s %-12s %-8s %-14s %s\n' "$label" "$context" "$skills" "$hook" "$excl"
+    done
+    printf '%-14s %-12s %-8s %-14s %s\n' "Unknown agent" "AGENTS.md" "-" "-" "written down"
+
+    cat <<'EOF'
+
+A rule written into AGENTS.md is an instruction the agent may ignore. A hook
+or a deny rule is enforced by the agent. They are not equivalent. "written
+down" in the table means the rule exists only as text in AGENTS.md.
+
+EOF
+}
+
+print_restart_notes() {
+    local id path existed
+    for id in ${APPLIED_AGENTS[@]+"${APPLIED_AGENTS[@]}"}; do
+        agent_has_cap "$id" skills || continue
+        path="${AGENT_SKILLS_PATHS[$id]:-}"
+        [[ -n $path ]] || continue
+        existed="${SKILLS_DIR_EXISTED[$id]:-0}"
+        if [[ $id == claude && $existed == 0 ]]; then
+            printf '\n%s%sRestart Claude Code before the new skills load.%s\n' \
+                "$C_BOLD" "$C_YELLOW" "$C_RESET"
+            cat <<'EOF'
+  ~/.claude/skills/ did not exist when your current session started, so Claude
+  Code is not watching it. Skills added later are normally picked up live, but
+  only in a directory that was there at startup. Quit and restart, then check
+  with /context or /skills.
+EOF
+        elif [[ $id == cursor && $existed == 0 ]]; then
+            printf '\n%s%sReload Cursor so it sees ~/.cursor/skills/.%s\n' \
+                "$C_BOLD" "$C_YELLOW" "$C_RESET"
+            cat <<'EOF'
+  Cursor discovers skills at startup. A first install creates ~/.cursor/skills/,
+  so a reload or restart is the sure way to pick them up. Hooks in
+  ~/.cursor/hooks.json reload on their own.
+EOF
+        elif [[ $id == codex && $existed == 0 ]]; then
+            printf '\n%s%sRestart Codex so it sees ~/.agents/skills/.%s\n' \
+                "$C_BOLD" "$C_YELLOW" "$C_RESET"
+            cat <<'EOF'
+  Codex loads personal skills from ~/.agents/skills. Trust the new PostToolUse
+  hook with /hooks before it will run; untrusted hooks are skipped.
+EOF
         fi
     done
-}
-
-# -------------------------------------------------------------- settings ----
-
-merge_settings() {
-    step "Merging hook config into ~/.claude/settings.json"
-    local hook="$HOOKS_DIR/unslop-gate.sh"
-
-    [[ -x $hook ]] || die "hook script is not executable: $hook"
-
-    acting "back up settings.json and merge the PostToolUse hook" || return 0
-
-    mkdir -p -- "$CLAUDE_DIR"
-    if [[ -f $SETTINGS_JSON ]]; then
-        # The .botkit-bak is the genuine pre-botkit state and is what
-        # uninstall.sh restores, so it is written once and never overwritten.
-        if [[ ! -f "$SETTINGS_JSON.botkit-bak" ]]; then
-            cp -- "$SETTINGS_JSON" "$SETTINGS_JSON.botkit-bak"
-            ok "backed up settings.json -> settings.json.botkit-bak"
-        else
-            skip "settings.json.botkit-bak already exists (kept — it is the pre-botkit state)"
-        fi
-        cp -- "$SETTINGS_JSON" "$SETTINGS_JSON.botkit-prev"
-    fi
-
-    # Replace any previous botkit hook entry rather than stacking a duplicate.
-    local before; before="$(file_hash "$SETTINGS_JSON")"
-    settings_json_edit '
-        .hooks //= {}
-        | .hooks.PostToolUse = (
-            ((.hooks.PostToolUse // []) | map(select(
-                ((.hooks // []) | map(.command // "") | any(test("unslop-gate\\.sh"))) | not
-            )))
-            + [{matcher: "Write|Edit", hooks: [{type: "command", command: $cmd}]}]
-          )
-    ' --arg cmd "$hook"
-    if [[ $before == "$(file_hash "$SETTINGS_JSON")" ]]; then
-        skip "PostToolUse hook already configured"
-    else
-        ok "PostToolUse hook -> $hook"
-        note_change "merged the unslop PostToolUse hook into settings.json"
-    fi
-}
-
-apply_exclusions() {
-    step "Applying search exclusions"
-    local name any=0
-
-    while read -r name; do
-        any=1
-        if ! ( load_bot_conf "$name" ) >/dev/null 2>&1; then
-            warn "bots/$name.conf is incomplete — no exclusions applied for it"
-            continue
-        fi
-        load_bot_conf "$name"
-        acting "write deny rules for $MOUNT_POINT" || continue
-        local before; before="$(file_hash "$SETTINGS_JSON")"
-        write_search_denies "$MOUNT_POINT" "$SEARCH_EXCLUDE"
-        if [[ $before == "$(file_hash "$SETTINGS_JSON")" ]]; then
-            skip "$name exclusions unchanged"
-        else
-            ok "$name -> $MOUNT_POINT"
-            note_change "search exclusions for $name"
-        fi
-    done < <(list_bots)
-
-    (( any )) || skip "no bots configured yet"
-
-    acting "write $UNSLOP_CONF" || return 0
-    write_unslop_conf
 }
 
 # ----------------------------------------------------------------- main ----
 
 main() {
-    # Claude Code only watches a skills directory that existed when the session
-    # started. On a first install it never does, so the new skills stay
-    # invisible until a restart. Detect that here rather than letting the user
-    # discover it by wondering why nothing loaded.
-    local skills_dir_existed=0
-    [[ -d $SKILLS_DIR ]] && skills_dir_existed=1
+    declare -gA SKILLS_DIR_EXISTED=()
 
     printf '%sbotkit%s — installing into %s\n\n' "$C_BOLD" "$C_RESET" "$HOME"
     (( DRY_RUN )) && info "dry run: nothing will be written" && info ""
 
+    BOTKIT_INSTALLING=1
     preflight
-    install_claude_md
     init_notes
     install_bot
 
-    # wiring is botkit's own skill, not a download, so --no-skills does not
-    # apply to it. An offline install still gets it.
-    install_wiring
+    select_agents
+
+    if (( ${#APPLIED_AGENTS[@]} == 0 )); then
+        warn "no known agent found on this machine"
+        if (( ${#LOOKED_FOR_AGENTS[@]} )); then
+            info "looked for: ${LOOKED_FOR_AGENTS[*]}"
+        else
+            info "looked for: none"
+        fi
+        info "installing the agent-neutral pieces anyway (AGENTS.md, bot, notes)"
+    else
+        step "Detected agents"
+        local id
+        for id in "${APPLIED_AGENTS[@]}"; do
+            ok "${AGENT_LABEL[$id]}"
+            if agent_has_cap "$id" skills && [[ -n ${AGENT_SKILLS_PATHS[$id]:-} ]]; then
+                [[ -d ${AGENT_SKILLS_PATHS[$id]} ]] && SKILLS_DIR_EXISTED[$id]=1 || SKILLS_DIR_EXISTED[$id]=0
+            fi
+        done
+    fi
+
+    BOTKIT_SKILLS_STAGE="$(mktemp -d)" || die "mktemp -d failed"
+    # shellcheck disable=SC2064
+    trap "rm -rf -- '$BOTKIT_SKILLS_STAGE'" EXIT
+
+    stage_own_skills
     if (( DO_SKILLS )); then
-        install_pstack_skills
-        install_robotics_skills
+        stage_pstack_skills
+        stage_robotics_skills
     else
         step "Skipping third-party skills (--no-skills)"
     fi
-    install_plugins
-    write_provenance
-    (( DRY_RUN )) || report_skills
 
-    merge_settings
-    apply_exclusions
+    apply_generic_agent
+    apply_selected_agents
+
+    acting "write $UNSLOP_CONF" && write_unslop_conf
+
+    if (( ! DRY_RUN )); then
+        local id
+        for id in ${APPLIED_AGENTS[@]+"${APPLIED_AGENTS[@]}"}; do
+            agent_has_cap "$id" skills || continue
+            [[ -n ${AGENT_SKILLS_PATHS[$id]:-} ]] || continue
+            step "Skills present in ${AGENT_SKILLS_PATHS[$id]}"
+            local expected name
+            expected=()
+            local src
+            shopt -s nullglob
+            for src in "$SKILLS_SRC_DIR"/*/; do
+                [[ -f "$src/SKILL.md" ]] && expected+=("$(basename -- "$src")")
+            done
+            shopt -u nullglob
+            (( DO_SKILLS )) && expected+=("${PSTACK_SKILLS[@]}" "${ROBOTICS_SKILLS[@]}")
+            for name in "${expected[@]}"; do
+                if [[ -f "${AGENT_SKILLS_PATHS[$id]}/$name/SKILL.md" ]]; then
+                    ok "$name"
+                else
+                    warn "$name is MISSING"
+                fi
+            done
+        done
+    fi
 
     printf '\n%s==> Done%s\n\n' "$C_BOLD" "$C_RESET"
 
@@ -522,16 +418,8 @@ main() {
         info "Nothing changed. Everything was already in place."
     fi
 
-    if (( ! skills_dir_existed && ! DRY_RUN )); then
-        printf '\n%s%sRestart Claude Code before the new skills load.%s\n' \
-            "$C_BOLD" "$C_YELLOW" "$C_RESET"
-        cat <<'EOF'
-  ~/.claude/skills/ did not exist when your current session started, so Claude
-  Code is not watching it. Skills added later are normally picked up live, but
-  only in a directory that was there at startup. Quit and restart, then check
-  with /context or /skills.
-EOF
-    fi
+    (( DRY_RUN )) || print_capability_report
+    (( DRY_RUN )) || print_restart_notes
 
     printf '\n%sStill yours to do:%s\n' "$C_BOLD" "$C_RESET"
     if (( ${#MANUAL[@]} )); then
@@ -541,7 +429,7 @@ EOF
   - Add a robot:  cp bots/example.conf bots/<name>.conf
                   bot probe <name>      # then choose REMOTE_MOUNT yourself
                   bot up <name>
-  - Start Claude Code from ~/dev, not from a repo below it.
+  - Start the agent from ~/dev, not from a repo below it.
 
 Keep this checkout where it is: ~/.local/bin/bot and the settings hook both
 point at $BOTKIT_ROOT. If you move it, re-run ./install.sh.

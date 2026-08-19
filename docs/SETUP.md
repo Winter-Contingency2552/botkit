@@ -7,13 +7,14 @@ Ubuntu with bash. No macOS, no zsh.
 | Command | Install | Why |
 |---|---|---|
 | `sshfs` | `sudo apt install sshfs` | mounting the robot |
-| `jq` | `sudo apt install jq` | editing `settings.json` safely |
+| `jq` | `sudo apt install jq` | editing JSON config safely |
 | `git` | `sudo apt install git` | the notes repo, fetching skills |
 | `ssh` | `sudo apt install openssh-client` | running commands on the robot |
-| `claude` | [claude.com/claude-code](https://claude.com/claude-code) | the agent |
 
-`install.sh` checks all five and names every missing one at once rather than
-failing on the first.
+`install.sh` checks those four and names every missing one at once rather than
+failing on the first. Agents are detected separately. If none is found, that is
+a warning, not an error: the installer writes `AGENTS.md`, installs `bot`, and
+says which agents it looked for.
 
 You also want key-based ssh to each robot. `bot` runs ssh with `BatchMode=yes`,
 so a password prompt is a failure, not a prompt.
@@ -37,9 +38,10 @@ Options:
 | `--dry-run` | report what would change, change nothing |
 | `--no-skills` | skip every third-party skill download (offline install) |
 | `--no-plugins` | skip the mattpocock marketplace step |
+| `--agent NAME` | configure only this adapter, plus the generic layer |
 
 **Keep the checkout where you put it.** `~/.local/bin/bot` is a symlink into it,
-and the hook path in `settings.json` is absolute. Moving the directory breaks
+and hook paths in agent config are absolute. Moving the directory breaks
 both; re-run `./install.sh` afterwards and it repairs them.
 
 If `~/.local/bin` is not on your `PATH`, the installer says so and prints the
@@ -65,6 +67,23 @@ into a Claude Code session instead:
 ```
 
 Skip the whole step with `--no-plugins`.
+
+## Restart or reload, per agent
+
+**Claude Code.** Restart after a first install. It watches `~/.claude/skills/`
+for changes and normally picks up new skills live, without a restart, but only
+if that directory existed when the session started. On a first install it does
+not exist, so nothing is watching it. Check with `/context` or `/skills`
+afterwards. Plugin changes need a restart or `/reload-plugins`.
+
+**Cursor.** Reload or restart after a first install so it sees `~/.cursor/skills/`.
+Hooks in `~/.cursor/hooks.json` reload on their own.
+
+**Codex.** Restart after a first install so it sees `~/.agents/skills/`. Trust
+the new PostToolUse hook with `/hooks` before it will run; untrusted hooks are
+skipped.
+
+**Unknown agent.** There is nothing to reload. Read `~/dev/AGENTS.md`.
 
 ## Your first bot
 
@@ -112,8 +131,9 @@ the notes record why.
 bot up mybot
 ```
 
-Mounts it, seeds `~/dev/notes/mybot/`, writes the search exclusions into
-settings, and prints the mount path. Running it twice is a no-op.
+Mounts it, seeds `~/dev/notes/mybot/`, writes the search exclusions, regenerates
+the marked block in `AGENTS.md`, and prints the mount path. Running it twice is
+a no-op.
 
 ```bash
 bot run mybot -- ros2 topic list
@@ -169,49 +189,59 @@ bot config is wrong for that robot. Check the ROS distro and the workspace path:
 **A password prompt appears.** ssh keys are not set up. `ssh-copy-id
 <user>@<host>`.
 
-**The hook does not fire.** Check `settings.json` has the `PostToolUse` entry
-pointing at an existing, executable `hooks/unslop-gate.sh`, then re-run
-`./install.sh`. Test it directly:
+**The hook does not fire.** For Claude Code, check `settings.json` has the
+`PostToolUse` entry pointing at an existing, executable `hooks/unslop-gate.sh`.
+For Cursor, check `~/.cursor/hooks.json` has the `postToolUse` entry. For
+Codex, check `~/.codex/hooks.json` has the `PostToolUse` entry, then trust it
+with `/hooks`. Then re-run `./install.sh`. Test it directly:
 
 ```bash
 echo '{"tool_input":{"file_path":"/home/you/dev/notes/x/architecture.md"}}' \
   | ./hooks/unslop-gate.sh
 ```
 
-**Claude Code does not see the skills after installing.** Restart it. This is
-the expected behaviour on a first install, not a failure.
+Cursor's payload puts the path at the top level. That shape works too:
 
-Claude Code watches `~/.claude/skills/` for changes and normally picks up new
-skills live, without a restart, but only if that directory existed when the
-session started. On a first install it does not exist, so nothing is watching
-it, and the skills stay invisible until you quit and restart. Check with
-`/context` or `/skills` afterwards.
+```bash
+echo '{"file_path":"/home/you/dev/notes/x/architecture.md"}' \
+  | ./hooks/unslop-gate.sh
+```
 
-The same applies to the mattpocock plugin: plugin changes need a restart or
-`/reload-plugins`.
+Codex file edits send an `apply_patch` command instead of a path:
+
+```bash
+echo '{"tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** Update File: /home/you/dev/notes/x/architecture.md\n"}}' \
+  | ./hooks/unslop-gate.sh
+```
+
+**The agent does not see the skills after installing.** Restart or reload it.
+This is the expected behaviour on a first install, not a failure. See
+[Restart or reload, per agent](#restart-or-reload-per-agent).
 
 Confirm they are on disk and well-formed in the meantime:
 
 ```bash
-ls ~/.claude/skills/
-claude plugin validate ~/.claude/skills
+ls ~/.claude/skills/ ~/.cursor/skills/ ~/.agents/skills/
 cat ~/.claude/skills/.botkit-provenance
+cat ~/.cursor/skills/.botkit-provenance
+cat ~/.agents/skills/.botkit-provenance
 ```
 
 **A skill is missing.** `install.sh` lists which skill directories exist at the
 end of every run. Re-run it; a network failure during the clone is the usual
-cause. `cat ~/.claude/skills/.botkit-provenance` shows what was installed from
-where.
+cause. The provenance file in that agent's skills directory shows what was
+installed from where.
 
 ## Uninstall
 
 ```bash
 ./uninstall.sh
+./uninstall.sh --agent cursor   # one agent, leave the others
 ```
 
-Removes the `bot` symlink, the skills it recorded installing, the plugin, and
-restores `settings.json` from `settings.json.botkit-bak`.
+Removes the `bot` symlink, the skills each adapter recorded installing, the
+Claude plugin, and restores each agent's config from its `.botkit-bak`.
 
 **It does not touch `~/dev/notes/`.** That repo may have a remote and teammates.
 Deleting it is a deliberate act you perform yourself, after checking it is
-pushed. `~/dev/CLAUDE.md` is also left alone.
+pushed. `~/dev/AGENTS.md` and `~/dev/CLAUDE.md` are also left alone.

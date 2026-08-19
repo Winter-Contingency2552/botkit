@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# PostToolUse hook for Write|Edit. When the file just written is user-facing
+# PostToolUse / after-edit hook. When the file just written is user-facing
 # prose, tell the agent to apply the unslop skill to it before moving on.
 #
 # This is a nudge, not a guarantee. A hook runs a shell command; skills are
@@ -61,12 +61,7 @@ _conf_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 
 command -v jq >/dev/null 2>&1 || exit 0
 
-path="$(jq -r 'try (.tool_input.file_path) // empty' 2>/dev/null)"
-[[ -n $path ]] || exit 0
-
-# Make matching predictable regardless of how the path arrived.
-[[ $path == /* ]] || path="$PWD/$path"
-base="${path##*/}"
+input="$(cat || true)"
 
 matches_any() {
     local subject="$1"; shift
@@ -78,30 +73,52 @@ matches_any() {
     return 1
 }
 
-# Anything under a mounted robot is out. Writing prose there would land it on
-# the robot's disk, which is not supposed to happen in the first place.
-for mount in ${BOTKIT_MOUNTS[@]+"${BOTKIT_MOUNTS[@]}"}; do
-    [[ -n $mount && $path == "$mount"/* ]] && exit 0
-done
+# Return 0 if this path is user-facing prose the nudge should fire on.
+is_prose() {
+    local path="$1" base
+    [[ -n $path ]] || return 1
+    [[ $path == /* ]] || path="$PWD/$path"
+    base="${path##*/}"
 
-# Anything matching a configured SEARCH_EXCLUDE entry is out. Directory-shaped
-# entries match a path segment; glob-shaped entries match the filename.
-for pattern in ${BOTKIT_EXCLUDES[@]+"${BOTKIT_EXCLUDES[@]}"}; do
-    [[ -n $pattern ]] || continue
-    case "$pattern" in
-        *'*'*) matches_any "$base" "$pattern" && exit 0 ;;
-        *)     [[ $path == *"/$pattern/"* ]] && exit 0 ;;
-    esac
-done
+    local mount
+    for mount in ${BOTKIT_MOUNTS[@]+"${BOTKIT_MOUNTS[@]}"}; do
+        [[ -n $mount && $path == "$mount"/* ]] && return 1
+    done
 
-matches_any "$path" ${EXCLUDE_GLOBS[@]+"${EXCLUDE_GLOBS[@]}"} && exit 0
-matches_any "$path" ${INCLUDE_GLOBS[@]+"${INCLUDE_GLOBS[@]}"} || exit 0
+    local pattern
+    for pattern in ${BOTKIT_EXCLUDES[@]+"${BOTKIT_EXCLUDES[@]}"}; do
+        [[ -n $pattern ]] || continue
+        case "$pattern" in
+            *'*'*) matches_any "$base" "$pattern" && return 1 ;;
+            *)     [[ $path == *"/$pattern/"* ]] && return 1 ;;
+        esac
+    done
 
-# stdout carries the JSON and nothing else.
+    matches_any "$path" ${EXCLUDE_GLOBS[@]+"${EXCLUDE_GLOBS[@]}"} && return 1
+    matches_any "$path" ${INCLUDE_GLOBS[@]+"${INCLUDE_GLOBS[@]}"}
+}
+
+should_nudge=0
+path="$(printf '%s' "$input" | jq -r 'try (.tool_input.file_path // .tool_input.path // .file_path) // empty' 2>/dev/null)"
+if is_prose "$path"; then
+    should_nudge=1
+else
+    # Codex apply_patch sends the patch in tool_input.command, not a file_path.
+    while IFS= read -r path; do
+        is_prose "$path" && { should_nudge=1; break; }
+    done < <(printf '%s' "$input" | jq -r 'try .tool_input.command // empty' 2>/dev/null |
+        sed -n 's/\r$//; s/^\*\*\* \(Add\|Update\) File: //p')
+fi
+[[ $should_nudge == 1 ]] || exit 0
+
+# stdout carries the JSON and nothing else. Claude Code reads
+# hookSpecificOutput.additionalContext. Cursor's postToolUse reads
+# additional_context. Extra keys are ignored by each side.
 jq -n --arg ctx "$MESSAGE" '{
   hookSpecificOutput: {
     hookEventName: "PostToolUse",
     additionalContext: $ctx
-  }
+  },
+  additional_context: $ctx
 }'
 exit 0
