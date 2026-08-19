@@ -15,9 +15,9 @@ means one of the two is a typo and guessing which is worse than stopping.
 
 | Field | Required | Default | What it does |
 |---|---|---|---|
-| `BOT_NAME` | no | the filename | Must match the filename if set. |
+| `BOT_NAME` | no | the filename | Local nickname. Must match the filename if set. Not a login. |
 | `BOT_HOST` | **yes** | none | Hostname or IP. `smartbot.local` works if mDNS does. |
-| `BOT_USER` | **yes** | none | The ssh user on the robot. |
+| `BOT_USER` | **yes** | none | Linux account on the robot. `ssh` and `sshfs` log in as `BOT_USER@BOT_HOST`. Often a shared account such as `team`, not your laptop username. |
 | `REMOTE_MOUNT` | **yes** | none | Absolute path on the robot to mount. See below. |
 | `MOUNT_POINT` | no | `$HOME/dev/<name>` | Where it appears locally. Absolute. |
 | `REMOTE_WS` | no | unset | Workspace on the robot. `bot run` and `bot build` `cd` here first. |

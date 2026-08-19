@@ -82,7 +82,7 @@ teammate reading.
 
 ```bash
 ./install.sh
-cp bots/example.conf bots/mybot.conf   # edit BOT_HOST and BOT_USER
+cp bots/example.conf bots/mybot.conf   # BOT_NAME, BOT_HOST, BOT_USER (the robot's linux login)
 bot probe mybot                        # read the layout, then choose REMOTE_MOUNT
 bot up mybot
 ```
@@ -138,6 +138,10 @@ connectivity reasons, stop and report.** That is the whole procedure.
 - **Builds and launches go through `bot run <name> -- <cmd>` or `bot build
   <name>`.** The laptop cannot build this code and should not try.
 - **Read `notes/<repo>/` before working in a repo.** `decisions.md` first.
+- **Other robots' notes are fair game.** They live at `~/dev/notes/<name>/` on
+  this laptop. The other robot does not have to be mounted. If the task is
+  similar to one already noted, read that `decisions.md` and record what you
+  reused, and what differs, in this robot's notes.
 - **Do not pick `REMOTE_MOUNT` by guessing.** Run `bot probe <name>`, read the
   layout and search-cost numbers it reports for that robot, choose deliberately,
   and record the reason in `notes/<name>/decisions.md`.

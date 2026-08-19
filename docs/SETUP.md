@@ -91,8 +91,22 @@ skipped.
 cp bots/example.conf bots/mybot.conf
 ```
 
-Edit `BOT_NAME` (it must match the filename), `BOT_HOST`, and `BOT_USER`. Leave
-`REMOTE_MOUNT` empty for now.
+Edit three fields. Leave `REMOTE_MOUNT` empty for now.
+
+| Field | What to put |
+|---|---|
+| `BOT_NAME` | Same as the filename. `bots/mybot.conf` means `BOT_NAME=mybot`. This is a local nickname, not a login. |
+| `BOT_HOST` | Hostname or IP of the robot. |
+| `BOT_USER` | The Linux account on the robot. Whatever you would type in `ssh BOT_USER@BOT_HOST`. On a shared robot this is often a shared account (`team`), not the username on this laptop. |
+
+You need key-based ssh as that user before `bot probe` will work:
+
+```bash
+ssh-copy-id team@mybot.local
+ssh team@mybot.local true    # must succeed without a password
+```
+
+Substitute the `BOT_USER` and `BOT_HOST` you just set.
 
 ### Choosing REMOTE_MOUNT
 
