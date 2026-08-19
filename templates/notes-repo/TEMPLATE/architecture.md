@@ -1,4 +1,4 @@
-# __REPO__ — architecture
+# __REPO__ architecture
 
 > Re-derivable from source, therefore disposable. Regenerate it rather than
 > patching it, usually with the `wiring` skill. If this file and the code

@@ -54,7 +54,7 @@ claude plugin marketplace add mattpocock/skills
 claude plugin install mattpocock-skills@mattpocock -y --scope user
 ```
 
-Note the marketplace is named `mattpocock`, not `skills` — the id is
+The marketplace is named `mattpocock`, not `skills`, so the id is
 `mattpocock-skills@mattpocock`. If either command fails or your build has no
 `plugin marketplace` subcommand, the installer says so and prints these to paste
 into a Claude Code session instead:
@@ -153,7 +153,7 @@ and write down why in that robot's `decisions.md`.
 **`bot up` says unreachable.** The robot is off, off wifi, or out of range.
 Check the robot. This is the common case, not the exception.
 
-**`ls ~/dev/mybot` hangs forever.** The mount is wedged — the connection dropped
+**`ls ~/dev/mybot` hangs forever.** The mount is wedged. The connection dropped
 while it was mounted. `bot status mybot` reports `stale` without hanging, because
 it reads `/proc/mounts` instead of touching the mount. Once the robot is back:
 `bot down -f mybot` then `bot up mybot`. Once.
@@ -182,7 +182,7 @@ echo '{"tool_input":{"file_path":"/home/you/dev/notes/x/architecture.md"}}' \
 the expected behaviour on a first install, not a failure.
 
 Claude Code watches `~/.claude/skills/` for changes and normally picks up new
-skills live, without a restart — but only if that directory existed when the
+skills live, without a restart, but only if that directory existed when the
 session started. On a first install it does not exist, so nothing is watching
 it, and the skills stay invisible until you quit and restart. Check with
 `/context` or `/skills` afterwards.

@@ -1,11 +1,11 @@
-# __REPO__ — decisions
+# __REPO__ decisions
 
 > Why the code is shaped the way it is: what was chosen, what was rejected, what
 > was tried and failed, what constraint forced a shape. None of this is
 > recoverable by reading the source. This is the file that earns its keep.
 >
-> Superseded decisions get marked superseded. They are never deleted — a
-> decision that was reversed is more informative than one that was never made.
+> Superseded decisions get marked superseded. They are never deleted. A decision
+> that was reversed tells you more than one that was never made.
 
 ## Format
 

@@ -1,6 +1,6 @@
 ---
 name: wiring
-description: Map what talks to what in a ROS 2 system and prove it — nodes, topics, services, actions, and the QoS on both ends of every connection. Prefers live introspection on the robot, falls back to reading source, and always says which it used. Use for "wiring", "what publishes /scan", "what does this node connect to", "what breaks if I change this", "why isn't this topic arriving".
+description: Map what talks to what in a ROS 2 system and prove it. Covers nodes, topics, services, actions, and the QoS on both ends of every connection. Prefers live introspection on the robot, falls back to reading source, and always says which it used. Use for "wiring", "what publishes /scan", "what does this node connect to", "what breaks if I change this", "why isn't this topic arriving".
 ---
 
 # wiring
@@ -8,9 +8,8 @@ description: Map what talks to what in a ROS 2 system and prove it — nodes, to
 Answer one question about one system: **what talks to what, right now, and how do
 I know.**
 
-Not a tutorial and not a learning path — that is `teach`. Not a change-impact
-analysis — that is `blast-radius`. This is a map of real connections, with the
-evidence attached.
+`teach` builds a learning path. `blast-radius` asks what a change breaks. This
+is a map of real connections, with the evidence attached.
 
 ## Invocation
 
@@ -26,9 +25,9 @@ evidence attached.
 Every answer opens with one of these, and it is not optional:
 
 ```
-Evidence: LIVE — <bot name>, <timestamp>, N nodes running
-Evidence: STATIC — source only, robot not consulted
-Evidence: MIXED — live for <X>, static for <Y> (say why)
+Evidence: LIVE (<bot name>, <timestamp>, N nodes running)
+Evidence: STATIC (source only, robot not consulted)
+Evidence: MIXED (live for <X>, static for <Y>, and why)
 ```
 
 An unlabelled map is worse than no map, because the reader cannot tell whether
@@ -37,10 +36,10 @@ they are looking at what is running or at what someone intended to run.
 ## Live mode (preferred)
 
 Live is ground truth. It reflects remappings, launch arguments, namespaces, and
-which nodes actually came up — none of which the source reliably tells you.
+which nodes actually came up. The source reliably tells you none of that.
 
 Check the robot is up first: `bot status <name>`. If it reports unreachable or
-stale, **do not retry** — fall back to static, say so, and say why. See
+stale, **do not retry**. Fall back to static, say so, and say why. See
 "When the robot is down" below.
 
 Then, through `bot run <name> -- <cmd>`:
@@ -72,24 +71,24 @@ A topic that lists, has a publisher, and reports no `hz` is a real finding.
 ## Static mode (fallback)
 
 Use static when the robot is unreachable, or when the repo is not a live system
-at all — a GUI, a library, a message package. Static is also the only way to see
-code paths that are not currently running.
+at all, like a GUI, a library, or a message package. Static is also the only way
+to see code paths that are not currently running.
 
 What to read, in order:
 
 1. **Launch files** first, not source. They decide namespaces, remappings, and
    which nodes exist at all. `launch/*.launch.py` (`Node(...)` with
    `remappings=[...]`, `parameters=[...]`, `namespace=...`), `*.launch.xml`
-   (`<remap from=… to=…/>`), and `ComposableNode(...)` for anything composed.
-2. **Parameter YAML** — `config/*.yaml`, keyed by node name under
+   (`<remap from="..." to="..."/>`), and `ComposableNode(...)` when composed.
+2. **Parameter YAML.** `config/*.yaml`, keyed by node name under
    `ros__parameters`.
 3. **Endpoint construction** in source:
    - Python: `create_publisher(`, `create_subscription(`, `create_service(`,
      `create_client(`, `ActionServer(`, `ActionClient(`
    - C++: `create_publisher<`, `create_subscription<`, `create_service<`,
      `create_client<`, `rclcpp_action::create_server`, `create_client`
-4. **Message and service definitions** — `msg/*.msg`, `srv/*.srv`,
-   `action/*.action` — for what actually crosses the wire.
+4. **Message and service definitions.** `msg/*.msg`, `srv/*.srv`, and
+   `action/*.action`, for what actually crosses the wire.
 
 ### The traps static mode falls into
 
@@ -108,22 +107,22 @@ What to read, in order:
 ## QoS is a first-class output
 
 Report reliability and durability for **both ends** of every connection. Not a
-footnote, not "defaults" — the actual values, from `ros2 topic info -v` when
-live, or from the QoS profile argument in the constructor when static
+footnote, and not "defaults". Report the actual values, from `ros2 topic info
+-v` when live, or from the QoS profile argument in the constructor when static
 (`SensorDataQoS`, `rclcpp::QoS(10)`, `qos_profile_sensor_data`, an explicit
 `QoSProfile(...)`).
 
 The subscriber's request must be no stricter than the publisher's offer.
-Otherwise the two never connect, and **nothing anywhere reports an error** —
-the topic simply never arrives:
+Otherwise the two never connect, and **nothing anywhere reports an error.** The
+topic just never arrives:
 
 | Publisher offers | Subscriber requests | Result |
 |---|---|---|
-| BEST_EFFORT | RELIABLE | **Incompatible — no delivery, silently** |
+| BEST_EFFORT | RELIABLE | **Incompatible. No delivery, silently** |
 | RELIABLE | BEST_EFFORT | Fine |
-| VOLATILE | TRANSIENT_LOCAL | **Incompatible — no latched data for late joiners** |
+| VOLATILE | TRANSIENT_LOCAL | **Incompatible. No latched data for late joiners** |
 | TRANSIENT_LOCAL | VOLATILE | Fine |
-| deadline 100ms | deadline 50ms | **Incompatible — publisher too slow to promise it** |
+| deadline 100ms | deadline 50ms | **Incompatible. Publisher too slow to promise it** |
 | liveliness lease 5s | liveliness lease 1s | **Incompatible** |
 
 This is the single most common real bug in a ROS 2 stack, and it is the reason
@@ -145,7 +144,7 @@ never quietly reconcile it.
 | In the code, absent live | The node isn't running, or a remap redirected it |
 | Live, absent from the code | Another package, a composed node, or a remap target |
 | Same topic, different type | Two things named alike that are not the same thing |
-| Same topic, different QoS per endpoint | The mismatch above — check delivery |
+| Same topic, different QoS per endpoint | The mismatch above. Check delivery |
 | Publisher exists, `hz` reports nothing | Node is up but not publishing; look at its state or its inputs |
 
 Each of these is a finding worth more than the map it appeared in.
@@ -165,7 +164,7 @@ Each of these is a finding worth more than the map it appeared in.
 ## Cross-check the decisions
 
 Read `~/dev/notes/<repo>/decisions.md` before finishing, and flag anywhere the
-live system contradicts a recorded decision — a topic that was supposed to be
+live system contradicts a recorded decision. A topic that was supposed to be
 removed, a QoS setting that was chosen deliberately and is now something else, a
 node that was meant to be merged into another.
 
@@ -177,9 +176,9 @@ Offer to write the result to `~/dev/notes/<repo>/architecture.md`. Never do it
 unasked. That file is regenerated rather than maintained, so overwriting it is
 fine once the user says yes.
 
-Anything learned about *why* — a QoS choice that turned out to be deliberate, a
-remap that exists for a reason — belongs in `decisions.md` instead, and that one
-is appended to, never overwritten.
+Anything learned about *why* belongs in `decisions.md` instead: a QoS choice
+that turned out to be deliberate, a remap that exists for a reason. That file is
+appended to, never overwritten.
 
 **Never write anything to the mount.** Notes live under `~/dev/notes/`. Files
 written under `~/dev/<bot>/` land on the robot's shared disk.

@@ -22,7 +22,7 @@ Skills install to `~/.claude/skills/<name>/SKILL.md`, the personal skills
 location, so they are available across every project.
 
 **After a first install, restart Claude Code.** It watches `~/.claude/skills/`
-and picks up added or edited skills live — but only in a directory that existed
+and picks up added or edited skills live, but only in a directory that existed
 when the session started, and on a first install it did not. `install.sh` says
 so when it creates the directory.
 
@@ -65,7 +65,7 @@ Distinct from `teach`, which builds a learning path for a subject, and from
 ## Robotics skills
 
 **Source:** [arpitg1304/robotics-agent-skills](https://github.com/arpitg1304/robotics-agent-skills)
-**Audited commit:** `f9bc5467ff9ee3d23f1a1b0b29a649843bb6ad11` — **pinned. Do not
+**Audited commit:** `f9bc5467ff9ee3d23f1a1b0b29a649843bb6ad11`. **Pinned. Do not
 track `main`.**
 
 Installed: `ros2`, `robot-bringup`, `robot-perception`, `robotics-testing`,
@@ -106,7 +106,7 @@ with, and 601 lines of tests versus zero. Line count is not a quality metric, an
   drops timesteps that exceed a bound.
 - An unbounded in-RAM episode list at 30 Hz, JSON-dumped at stop, versus a
   bounded buffer with drop counting and a separate writer module.
-- Default depth-10 reliable QoS on an `Image` subscription — exactly the
+- Default depth-10 reliable QoS on an `Image` subscription, exactly the
   best-effort-publisher-against-reliable-subscriber failure `wiring` exists to
   catch.
 - 601 lines of tests against zero. Tests appearing is the strongest signal in the
@@ -135,14 +135,14 @@ plugin install path. They are portable `SKILL.md` directories, so `install.sh`
 clones the repo shallow (sparse-checking out `pstack/skills` when git supports
 it) and copies exactly three. The rest of the repo is not installed.
 
-**`unslop`** — cuts AI tells from writing. Model-invocable, and additionally
-nudged by the hook below.
+**`unslop`.** Cuts AI tells from writing. Model-invocable, and nudged by the
+hook below.
 
-**`blast-radius`** — what a change breaks somewhere else, beyond the diff, proved
-by running code rather than writing it up. Marked
-`disable-model-invocation`, so it only ever runs when you ask for it by name.
+**`blast-radius`.** What a change breaks somewhere else, beyond the diff, proved
+by running code rather than writing it up. Marked `disable-model-invocation`, so
+it only ever runs when you ask for it by name.
 
-**`bro`** — restates the last message in plain language, no jargon. Also by name
+**`bro`.** Restates the last message in plain language, no jargon. Also by name
 only.
 
 ## mattpocock skills
@@ -151,7 +151,7 @@ only.
 as a plugin.
 
 The marketplace manifest names itself `mattpocock`, so the plugin id is
-`mattpocock-skills@mattpocock` — **not** `@skills`. `install.sh` probes for
+`mattpocock-skills@mattpocock`, **not** `@skills`. `install.sh` probes for
 `claude plugin marketplace`, uses it when present, and otherwise prints the
 `/plugin` lines to paste. Skip the step entirely with `--no-plugins`.
 
@@ -174,9 +174,9 @@ lockfiles, anything under a configured mount point, and anything matching
 
 ### It is a nudge, not a guarantee
 
-A hook runs a shell command. Skills are prompts. This hook cannot apply `unslop`
-— all it can do is inject an instruction into the context and rely on the agent
-to act on it. It is a strong nudge and nothing stronger.
+A hook runs a shell command. Skills are prompts. This hook cannot apply
+`unslop`. All it can do is inject an instruction into the context and rely on
+the agent to act on it. It is a strong nudge and nothing stronger.
 
 **If you need determinism, run `unslop` explicitly.**
 

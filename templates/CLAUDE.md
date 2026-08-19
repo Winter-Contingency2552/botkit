@@ -1,4 +1,4 @@
-# ~/dev — working rules
+# ~/dev working rules
 
 Start Claude Code from `~/dev`, never from a repo below it. Rooting here is what
 lets one session see both `notes/<repo>/` and the mounted robot source without
@@ -35,7 +35,7 @@ entries into dated summaries instead of letting it grow forever.
 under `~/dev/<bot>/` lands on the robot's disk, where teammates see it. No notes,
 no scratch files, no agent output. Notes go in `~/dev/notes/`, always.
 
-**Never search the paths in that bot's `SEARCH_EXCLUDE`** — build, install, log,
+**Never search the paths in that bot's `SEARCH_EXCLUDE`:** build, install, log,
 `.ros`, bags, weights. They are denied in settings, and going around the denial
 with a Bash `find` or `rg` is the same mistake made deliberately.
 

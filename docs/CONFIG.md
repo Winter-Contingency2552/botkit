@@ -16,9 +16,9 @@ means one of the two is a typo and guessing which is worse than stopping.
 | Field | Required | Default | What it does |
 |---|---|---|---|
 | `BOT_NAME` | no | the filename | Must match the filename if set. |
-| `BOT_HOST` | **yes** | — | Hostname or IP. `smartbot.local` works if mDNS does. |
-| `BOT_USER` | **yes** | — | The ssh user on the robot. |
-| `REMOTE_MOUNT` | **yes** | — | Absolute path on the robot to mount. No default — see below. |
+| `BOT_HOST` | **yes** | none | Hostname or IP. `smartbot.local` works if mDNS does. |
+| `BOT_USER` | **yes** | none | The ssh user on the robot. |
+| `REMOTE_MOUNT` | **yes** | none | Absolute path on the robot to mount. See below. |
 | `MOUNT_POINT` | no | `$HOME/dev/<name>` | Where it appears locally. Absolute. |
 | `REMOTE_WS` | no | unset | Workspace on the robot. `bot run` and `bot build` `cd` here first. |
 | `BUILD_CMD` | no | unset | What `bot build` runs. Required only for `bot build`. |
@@ -26,7 +26,7 @@ means one of the two is a typo and guessing which is worse than stopping.
 | `SEARCH_EXCLUDE` | no | see below | Paths under the mount the agent must not search. |
 
 The file is sourced by bash, so `$HOME` and earlier variables expand. That is why
-`SOURCE_CMD` can refer to `$REMOTE_WS` — as long as `REMOTE_WS` is set above it.
+`SOURCE_CMD` can refer to `$REMOTE_WS`, as long as `REMOTE_WS` is set above it.
 
 ### `REMOTE_MOUNT` has no default
 
@@ -68,8 +68,8 @@ layers are the usual additions.
 
 Backed up to `settings.json.botkit-bak` before the first change. That backup is
 written **once** and never overwritten, so it always holds the genuine
-pre-botkit state — it is what `uninstall.sh` restores. A `settings.json.botkit-prev`
-is refreshed on every run for same-day mistakes.
+pre-botkit state, which is what `uninstall.sh` restores. A
+`settings.json.botkit-prev` is refreshed on every run for same-day mistakes.
 
 If `jq` is missing, the installer says so and exits. It will not do text surgery
 on your JSON.
@@ -110,7 +110,7 @@ the file-reading Bash commands Claude Code recognises. `Glob(path)` and
 those instead would look right and do nothing.
 
 They do **not** cover arbitrary subprocesses. A Python script or a hand-rolled
-`find` that reads those paths is not stopped by anything here — which is why the
+`find` that reads those paths is not stopped by anything here. That is why the
 README also tells agents not to search them.
 
 **Ownership by prefix.** JSON has no comments, so botkit claims every deny entry
@@ -133,7 +133,7 @@ BOTKIT_EXCLUDES=( build install log .ros bags '*.bag' ... )
 The hook fires on every Write and Edit, so it sources this one small generated
 file rather than reading every `bots/*.conf` itself.
 
-**Do not edit it** — `install.sh` and `bot up` overwrite it. For your own
+**Do not edit it.** `install.sh` and `bot up` overwrite it. For your own
 additions, create `~/.claude/botkit-unslop.local`, which is never regenerated:
 
 ```bash
