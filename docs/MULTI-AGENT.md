@@ -30,7 +30,7 @@ None of this needs changing. It is plain shell and plain files.
 | Piece | Current mechanism | Lives in |
 |---|---|---|
 | Instructions file | `~/dev/CLAUDE.md` | `install.sh`, `templates/CLAUDE.md` |
-| Skills | copied to `~/.claude/skills/<name>/` | `install.sh` |
+| Skills, botkit's own and fetched | copied to `~/.claude/skills/<name>/` only | `install.sh`, `skills/` |
 | unslop nudge | `PostToolUse` hook in `~/.claude/settings.json` | `install.sh`, `hooks/unslop-gate.sh` |
 | Search exclusions | `permissions.deny` `Read(...)` rules in `settings.json` | `lib/common.sh` `write_search_denies` |
 | Plugin install | `claude plugin marketplace add` | `install.sh` |
@@ -202,13 +202,64 @@ question below resolves against it.
   capability must be dropped and folded into `AGENTS.md` instead. Do not break
   the no-writes-to-the-robot rule to gain an ignore file.
 
-### 5. Preflight stops requiring claude
+### 5. botkit's own skills install to every agent
+
+botkit ships its own skills in `skills/`. Today that is `wiring`, and more will
+follow. They currently install only to `~/.claude/skills/`.
+
+Two facts make this mostly mechanical:
+
+- **`wiring` has no harness-specific content.** It references `bot run`,
+  `bot status`, and paths under `~/dev/notes/`, all of which are agent-neutral.
+  Verified by grep: no mention of Claude, `settings.json`, hooks, or any tool
+  name.
+- **Claude Code and Cursor both take a directory containing `SKILL.md`, and both
+  derive the skill's identity from the directory name**, not from the frontmatter
+  `name`. So the same directory copies to both unchanged.
+
+What to build:
+
+- Each adapter that reports the `skills` capability installs from
+  `$SKILLS_SRC_DIR` into that agent's own skills directory. One loop, one source.
+- The third-party skills botkit fetches, the three pstack ones and the five
+  robotics ones, are the same `SKILL.md` format and go to every skills-capable
+  agent too. Do not special-case botkit's own skills against the fetched ones.
+- **Provenance becomes per-agent.** `.botkit-provenance` currently lives at
+  `~/.claude/skills/.botkit-provenance`. Write one inside each agent's skills
+  directory instead, so `uninstall.sh` can reverse each agent independently. One
+  agent's provenance file must never drive deletions in another agent's
+  directory.
+
+### Writing a new custom skill so it stays portable
+
+This part is for whoever adds the next skill, not just for this port.
+
+- **The directory name is the invocation name on both harnesses.** Choose it
+  deliberately. In Claude Code, the frontmatter `name` is only a display label
+  for personal skills; the command comes from the directory.
+- **Stick to three frontmatter keys.** Across all nine currently installed
+  skills, only `name`, `description`, and `disable-model-invocation` appear.
+  Anything else risks being ignored or rejected by one harness.
+- **`disable-model-invocation: true` is verified for Claude Code and unverified
+  for Cursor.** Two installed skills rely on it, `blast-radius` and `bro`, to
+  stay by-name-only. If a new skill must never fire on its own, confirm Cursor
+  honours the key before depending on it, and record the answer in
+  `docs/SKILLS.md` either way.
+- **Never name a harness in the skill body.** Write `bot run <name> -- ros2 node
+  list`, not "use the Bash tool to run". `wiring` is the model to copy: it tells
+  the agent what to run and what to conclude, and never how its own harness
+  works.
+- **Keep it self-contained.** A skill must not assume a hook fired, a setting was
+  written, or another skill ran first. The harnesses differ in exactly those
+  places.
+
+### 6. Preflight stops requiring claude
 
 `DEPENDENCIES` becomes `sshfs jq git ssh`. Then detect agents separately. If no
 known agent is found, that is a warning and not an error: install everything
 neutral, write `AGENTS.md`, and say which agents were looked for.
 
-### 6. The capability report
+### 7. The capability report
 
 At the end of the run, print a table. This is the part the user specifically
 asked for, so do not reduce it to a single line.
@@ -225,12 +276,12 @@ State plainly, in words and not just in a table, that a rule written into
 is enforced by the harness. They are not equivalent and the report must not
 imply they are.
 
-### 7. uninstall.sh reverses all of it
+### 8. uninstall.sh reverses all of it
 
 Per agent, using the same adapters. It already refuses to touch `~/dev/notes/`,
 and that must stay true.
 
-### 8. Docs
+### 9. Docs
 
 - `docs/SKILLS.md`: per-agent install locations.
 - `docs/CONFIG.md`: what each adapter writes, and where.
@@ -260,25 +311,109 @@ building work item 4.
 writing into a mount. The docs mention a global ignore list in user settings.
 Find out whether it is reachable from a config file rather than only the GUI.
 
-## Acceptance checks
+## Acceptance checks, offline
+
+These need no robot. Run them with `HOME=<a temp dir> ./install.sh` so nothing
+touches the real home directory.
 
 1. `./install.sh` succeeds on a machine with no agent installed at all, and says
    so rather than failing.
 2. `~/dev/AGENTS.md` exists. `~/dev/CLAUDE.md` is a symlink to it.
 3. Claude Code keeps everything it has today: 9 skills, the `PostToolUse` hook,
-   and the `Read(...)` deny rules. Verified by the checks already in this repo.
-4. With Cursor installed, `~/.cursor/skills/` gets the same 9 skill directories.
-5. The generated block in `AGENTS.md` lists real mount paths and real exclusion
+   and the `Read(...)` deny rules.
+4. With Cursor installed, `~/.cursor/skills/` gets the same 9 skill directories,
+   botkit's own `wiring` among them.
+5. Adding a second directory under `skills/` installs it to every skills-capable
+   agent with no edit to `install.sh`.
+6. Each agent's skills directory has its own `.botkit-provenance`, and
+   uninstalling one agent leaves the other agent's skills untouched.
+7. The generated block in `AGENTS.md` lists real mount paths and real exclusion
    lists, and regenerates on `bot up` without touching text outside the markers.
-6. Editing `AGENTS.md` by hand outside the markers, then re-running
+8. Editing `AGENTS.md` by hand outside the markers, then re-running
    `install.sh`, preserves the edit.
-7. A second `./install.sh` reports that nothing changed, which is already how
-   this repo tests idempotency.
-8. The capability report distinguishes enforced from written down.
-9. `./uninstall.sh` leaves `~/dev/notes/` alone and restores every agent's
-   config from its backup.
-10. Adding a new adapter file to `lib/agents/` makes that agent work with no
+9. A second `./install.sh` reports that nothing changed.
+10. The capability report distinguishes enforced from written down.
+11. `./uninstall.sh` leaves `~/dev/notes/` alone and restores every agent's
+    config from its backup.
+12. Adding a new adapter file to `lib/agents/` makes that agent work with no
     edit to `install.sh`.
+
+## Acceptance checks, against a real robot
+
+**None of these have ever been run.** botkit was built and validated entirely
+offline, against a sandboxed `HOME`, because no robot was available. Everything
+below is unverified against hardware. Treat a failure here as a real bug in
+botkit, not as a mistake in the test.
+
+Run the whole list once on Claude Code, then again on Cursor. The point of the
+second pass is that the `bot` toolchain is supposed to be harness-neutral, so
+every result should be identical except where the capability table says
+otherwise.
+
+Set up first:
+
+```bash
+cp bots/example.conf bots/mybot.conf   # set BOT_HOST and BOT_USER, leave REMOTE_MOUNT empty
+```
+
+### The checks
+
+1. **`bot probe mybot`** returns a real layout report: directory sizes, workspace
+   candidates with their build/install/log sizes and package counts, bag and
+   weight counts, and the two file counts. It must write nothing to the robot.
+   Confirm with `ssh <user>@<host> 'ls -la ~'` before and after.
+2. **Choose `REMOTE_MOUNT` from what the probe said**, set it, and record the
+   reason in `~/dev/notes/mybot/decisions.md`. The probe must not have chosen for
+   you.
+3. **`bot up mybot`** mounts, seeds `~/dev/notes/mybot/` including `inbox/`,
+   writes the exclusions, and prints the mount path.
+4. **`bot up mybot` again** is a clean no-op that changes nothing.
+5. **`bot run mybot -- ros2 topic list`** returns real topics. Then
+   **`bot build mybot`** actually builds on the robot.
+6. **`bot down mybot`** unmounts. A second `bot down mybot` exits 0 without
+   erroring.
+7. **Stale versus unreachable.** With the bot mounted, drop the robot off wifi.
+   `bot status mybot` must report `stale` and must return within seconds rather
+   than hanging. Power the robot off entirely with nothing mounted:
+   `bot status mybot` must report `unreachable`. These two are detected
+   differently and both paths need exercising.
+8. **Recovery.** After a `stale`, bring the robot back, then `bot down -f mybot`
+   followed by `bot up mybot`. It should recover in exactly those two commands.
+9. **Power-down drill.** With a session running against a mounted bot, physically
+   power the robot off, then ask the agent to do something that touches the
+   mount. The agent must detect unreachability, say so, and stop **within two
+   failed commands**. If it starts investigating the filesystem or reading source
+   to explain the error, the agent-facing rules in `README.md` and `AGENTS.md`
+   are not working and need rewriting. This is a test of the documentation, not
+   of the code.
+10. **`wiring` live.** With the robot up, run `wiring`. It must label itself
+    LIVE, cite real `ros2` command output, and report QoS on both ends of the
+    connections it lists.
+11. **`wiring` static.** With the robot down, run `wiring` again. It must fall
+    back, label itself STATIC, say why, and claim no live evidence.
+12. **`wiring` on a repo that is not a robot.** Run it against the GUI. It must
+    go static without complaining that a robot is missing.
+13. **Search latency.** Run the timed comparison from `docs/SETUP.md`, with and
+    without the exclusions, and **write both numbers into the table there**. That
+    table currently says TBD. If the excluded case is still slow, that robot
+    should mount its workspace instead of its home directory, and the reason goes
+    in its `decisions.md`.
+14. **The exclusions actually bite.** With the bot mounted, ask the agent to
+    search for something that only exists under `build/` or in a `.bag`. On
+    Claude Code the deny rule should block it. On an agent where the rule is only
+    written down, note what actually happened. That difference is the whole point
+    of the capability table.
+15. **Nothing landed on the robot.** After all of the above:
+    `ssh <user>@<host> 'ls -la ~; ls -la ~/.claude ~/.cursor 2>/dev/null'`.
+    There must be no agent config, no notes, no botkit files. This is the
+    constraint the whole project exists to protect, so check it last and check it
+    properly.
+
+### What to do with the results
+
+Record them in `~/dev/notes/botkit/progress.md`, and anything that turned out to
+be a design decision rather than a result in `decisions.md`. If a check fails,
+fix botkit rather than relaxing the check.
 
 ## How to work in this repo
 
