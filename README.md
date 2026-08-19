@@ -82,7 +82,7 @@ teammate reading.
 
 ```bash
 ./install.sh
-cp bots/example.conf bots/mybot.conf   # BOT_NAME, BOT_HOST, BOT_USER (the robot's linux login)
+cp bots/example.conf bots/mybot.conf   # prompt user@host -> BOT_USER, BOT_HOST; see docs/SETUP.md
 bot probe mybot                        # read the layout, then choose REMOTE_MOUNT
 bot up mybot
 ```

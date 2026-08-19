@@ -95,18 +95,37 @@ Edit three fields. Leave `REMOTE_MOUNT` empty for now.
 
 | Field | What to put |
 |---|---|
-| `BOT_NAME` | Same as the filename. `bots/mybot.conf` means `BOT_NAME=mybot`. This is a local nickname, not a login. |
-| `BOT_HOST` | Hostname or IP of the robot. |
-| `BOT_USER` | The Linux account on the robot. Whatever you would type in `ssh BOT_USER@BOT_HOST`. On a shared robot this is often a shared account (`team`), not the username on this laptop. |
+| `BOT_NAME` | Same as the filename. `bots/smartbot10.conf` means `BOT_NAME=smartbot10`. This is a local nickname, not a login. |
+| `BOT_HOST` | Whatever you put after `@` in `ssh`. Hostname, `hostname.local`, or an IP. See below. |
+| `BOT_USER` | The Linux account on the robot, the part before `@` on the robot's prompt. Often a shared account, not the username on this laptop. |
+
+### Reading the robot's prompt
+
+A typical prompt is `user@hostname`. If the robot shows `smartbot@smartbot10`:
+
+| Prompt | Field | Value |
+|---|---|---|
+| `smartbot` (before `@`) | `BOT_USER` | `smartbot` |
+| `smartbot10` (after `@`) | `BOT_HOST` | `smartbot10`, or `smartbot10.local`, or the IP |
+| (you pick) | `BOT_NAME` | usually `smartbot10`, matching `bots/smartbot10.conf` |
+
+On the robot, `whoami` is `BOT_USER` and `hostname` is the machine's name.
+
+**`.local` is not added by botkit.** It is mDNS (Avahi on Ubuntu, Bonjour on Mac). A machine named `smartbot10` can advertise itself as `smartbot10.local` on the LAN so you do not need a DNS server. Use whichever form actually reaches the robot from the laptop:
+
+```bash
+ping -c1 smartbot10
+ping -c1 smartbot10.local
+```
+
+Whichever one replies is `BOT_HOST`. If both fail, use the IP. `BOT_HOST` is just the string you put after `ssh user@`.
 
 You need key-based ssh as that user before `bot probe` will work:
 
 ```bash
-ssh-copy-id team@mybot.local
-ssh team@mybot.local true    # must succeed without a password
+ssh-copy-id smartbot@smartbot10        # or smartbot@smartbot10.local
+ssh smartbot@smartbot10 true           # must succeed without a password
 ```
-
-Substitute the `BOT_USER` and `BOT_HOST` you just set.
 
 ### Choosing REMOTE_MOUNT
 

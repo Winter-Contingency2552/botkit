@@ -28,6 +28,18 @@ means one of the two is a typo and guessing which is worse than stopping.
 The file is sourced by bash, so `$HOME` and earlier variables expand. That is why
 `SOURCE_CMD` can refer to `$REMOTE_WS`, as long as `REMOTE_WS` is set above it.
 
+### `BOT_USER` and `BOT_HOST`
+
+A robot prompt like `smartbot@smartbot10` is `BOT_USER@hostname`. `BOT_USER` is
+the Linux login (`whoami` on the robot). `BOT_HOST` is whichever of `hostname`,
+`hostname.local`, or an IP actually answers from the laptop (`ping -c1` each).
+
+`.local` is mDNS (Avahi on Ubuntu), not a botkit suffix. Use it only when that
+form is the one that pings. An IP is always valid.
+
+`BOT_NAME` is not in the prompt. It is the local nickname and must match the
+config filename.
+
 ### `REMOTE_MOUNT` has no default
 
 Deliberately. What to mount is a decision per robot, not a botkit policy:
