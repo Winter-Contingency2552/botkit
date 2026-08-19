@@ -10,9 +10,7 @@ every piece of AI config live on my laptop. The robot's filesystem is mounted
 over sshfs, so there is exactly one copy of the code and it is the robot's copy.
 Builds and launches run on the robot over ssh.
 
-**Nothing AI-related is ever written to a robot's disk.** Those machines are
-shared, and several of the people sharing them are not enthusiastic about AI
-tooling. That constraint is not a preference here, it is the design.
+**Nothing AI-related is ever written to a robot's disk.** 
 
 ```
 laptop                                robot
