@@ -1,0 +1,17 @@
+# The notes repo is its own git repo, kept entirely out of this one.
+# Two repos, no nesting, no submodules.
+notes/
+
+# Bot configs are yours. bots/.gitignore handles the exception for example.conf.
+
+# Editor and OS noise
+*.swp
+*~
+.DS_Store
+.idea/
+.vscode/
+
+# Scratch
+*.tmp
+*.bak
+scratch/

@@ -1,0 +1,3 @@
+# Bot configs are yours, not the repo's. They name real hosts and real users.
+*.conf
+!example.conf

@@ -1,0 +1,338 @@
+#!/usr/bin/env bash
+#
+# bot -- drive a robot from the laptop: mount its filesystem, run commands on
+# it, seed its notes. Installed as a symlink at ~/.local/bin/bot, so it resolves
+# its own real path to find the botkit checkout.
+#
+# Nothing this script does writes to the robot's disk. Remote commands are piped
+# to `bash` over stdin and remote reads are read-only.
+
+set -uo pipefail
+
+# shellcheck source=../lib/common.sh
+source "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../lib/common.sh"
+
+SSHFS_OPTS="reconnect,ServerAliveInterval=15,ServerAliveCountMax=3,ConnectTimeout=10,idmap=user"
+
+usage() {
+    cat <<'USAGE'
+usage: bot <command> [args]
+
+  bot up <name>            mount the robot, seed its notes, apply search exclusions
+  bot down [-f] <name>     unmount cleanly (-f forces a lazy unmount of a wedged mount)
+  bot run <name> -- <cmd>  run a command on the robot with ROS sourced
+  bot build <name>         run the config's BUILD_CMD on the robot
+  bot notes <name>         seed ~/dev/notes/<name>/ (no mount, no config needed)
+  bot status [name]        list configured bots and whether each is reachable/mounted
+  bot probe <name>         report the robot's layout so you can choose REMOTE_MOUNT
+
+Bot configs live in bots/<name>.conf. Start from bots/example.conf.
+USAGE
+}
+
+# ------------------------------------------------------------------ notes ----
+
+# Copy the notes template in, creating only what is missing. Never overwrites,
+# so running it against an established notes directory is a no-op.
+seed_notes() {
+    local name="$1"
+    local src="$TEMPLATES_DIR/notes-repo/TEMPLATE"
+    local dest="$NOTES_DIR/$name"
+    local path rel created=0
+
+    [[ $name =~ ^[A-Za-z0-9_-]+$ ]] || die "invalid notes name '$name'"
+    [[ -d $src ]] || die "missing notes template at $src"
+
+    while IFS= read -r -d '' path; do
+        rel="${path#"$src"/}"
+        if [[ -d $path ]]; then
+            mkdir -p -- "$dest/$rel"
+        elif [[ ! -e "$dest/$rel" ]]; then
+            mkdir -p -- "$(dirname -- "$dest/$rel")"
+            sed "s/__REPO__/$name/g" -- "$path" > "$dest/$rel"
+            created=1
+        fi
+    done < <(find "$src" -mindepth 1 -print0 | sort -z)
+
+    if (( created )); then
+        ok "seeded notes: $dest"
+    else
+        skip "notes already present: $dest"
+    fi
+}
+
+# -------------------------------------------------------------------- up ----
+
+cmd_up() {
+    local name="${1:-}"
+    [[ -n $name ]] || die "usage: bot up <name>"
+    load_bot_conf "$name"
+
+    if is_mounted "$MOUNT_POINT"; then
+        if mount_live "$MOUNT_POINT"; then
+            skip "already mounted: $MOUNT_POINT"
+        else
+            die "$MOUNT_POINT is mounted but not responding (stale). Run 'bot down -f $name' once the robot is back up, then 'bot up $name'."
+        fi
+    else
+        bot_reachable "$BOT_USER" "$BOT_HOST" ||
+            die "$BOT_USER@$BOT_HOST is unreachable. The robot is probably powered off or off wifi — check it before retrying."
+
+        mkdir -p -- "$MOUNT_POINT" || die "cannot create mount point $MOUNT_POINT"
+
+        # A non-empty directory means something is already there. Mounting over
+        # it would hide it, which is how people lose local files.
+        if [[ -n "$(ls -A -- "$MOUNT_POINT" 2>/dev/null)" ]]; then
+            die "$MOUNT_POINT is not empty and not a mount — refusing to mount over existing files"
+        fi
+
+        sshfs -o "$SSHFS_OPTS" \
+            "$BOT_USER@$BOT_HOST:$REMOTE_MOUNT" "$MOUNT_POINT" ||
+            die "sshfs failed to mount $BOT_USER@$BOT_HOST:$REMOTE_MOUNT"
+
+        # Never trust sshfs's exit code alone. A partial mount that reports
+        # success and then blocks is the failure this guards against.
+        if ! is_mounted "$MOUNT_POINT" || ! mount_live "$MOUNT_POINT"; then
+            fusermount -u -- "$MOUNT_POINT" >/dev/null 2>&1
+            die "mount did not come up cleanly at $MOUNT_POINT — nothing left mounted"
+        fi
+        ok "mounted $BOT_USER@$BOT_HOST:$REMOTE_MOUNT -> $MOUNT_POINT"
+    fi
+
+    seed_notes "$name"
+
+    write_search_denies "$MOUNT_POINT" "$SEARCH_EXCLUDE"
+    ok "search exclusions applied for $MOUNT_POINT"
+    write_unslop_conf
+
+    printf '%s\n' "$MOUNT_POINT"
+}
+
+# ------------------------------------------------------------------ down ----
+
+cmd_down() {
+    local force=0
+    if [[ ${1:-} == -f ]]; then force=1; shift; fi
+
+    local name="${1:-}"
+    [[ -n $name ]] || die "usage: bot down [-f] <name>"
+    load_bot_conf "$name"
+
+    if ! is_mounted "$MOUNT_POINT"; then
+        skip "not mounted: $MOUNT_POINT"
+        return 0
+    fi
+
+    if (( force )); then
+        fusermount -uz -- "$MOUNT_POINT" || die "lazy unmount of $MOUNT_POINT failed"
+        ok "lazily unmounted $MOUNT_POINT"
+        return 0
+    fi
+
+    if fusermount -u -- "$MOUNT_POINT" 2>/dev/null; then
+        ok "unmounted $MOUNT_POINT"
+        return 0
+    fi
+
+    die "could not unmount $MOUNT_POINT (busy or wedged). Close anything using it, or run 'bot down -f $name' to force a lazy unmount."
+}
+
+# ------------------------------------------------------------------- run ----
+
+# Build the remote command and hand it to ssh as a single quoted argument.
+remote_exec() {
+    local name="$1"; shift
+    local remote=''
+
+    [[ $# -gt 0 ]] || die "no command given"
+
+    [[ -n ${SOURCE_CMD:-} ]] && remote+="$SOURCE_CMD"$'\n'
+    [[ -n ${REMOTE_WS:-} ]] && remote+="cd $(printf '%q' "$REMOTE_WS")"$'\n'
+    remote+="$*"
+
+    bot_reachable "$BOT_USER" "$BOT_HOST" ||
+        die "$BOT_USER@$BOT_HOST is unreachable. The robot is probably powered off or off wifi — check it before retrying."
+
+    ssh -o BatchMode=yes -o ConnectTimeout=10 \
+        -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+        "$BOT_USER@$BOT_HOST" "bash -lc $(printf '%q' "$remote")"
+}
+
+cmd_run() {
+    local name="${1:-}"
+    [[ -n $name ]] || die "usage: bot run <name> -- <cmd>"
+    shift
+    [[ ${1:-} == -- ]] && shift
+    [[ $# -gt 0 ]] || die "usage: bot run <name> -- <cmd>"
+
+    load_bot_conf "$name"
+    remote_exec "$name" "$@"
+}
+
+cmd_build() {
+    local name="${1:-}"
+    [[ -n $name ]] || die "usage: bot build <name>"
+    load_bot_conf "$name"
+    [[ -n ${BUILD_CMD:-} ]] || die "bots/$name.conf: BUILD_CMD is not set"
+    remote_exec "$name" "$BUILD_CMD"
+}
+
+# ---------------------------------------------------------------- status ----
+
+# The four states exist because they have different causes and different fixes.
+# `stale` in particular is what makes an agent think it is looking at a
+# permissions bug when the robot has actually driven out of wifi range.
+bot_state() {
+    local name="$1"
+    if is_mounted "$MOUNT_POINT"; then
+        if mount_live "$MOUNT_POINT"; then printf 'mounted\n'; else printf 'stale\n'; fi
+    elif bot_reachable "$BOT_USER" "$BOT_HOST"; then
+        printf 'unmounted\n'
+    else
+        printf 'unreachable\n'
+    fi
+}
+
+cmd_status() {
+    local name="${1:-}" state rc=0
+
+    if [[ -n $name ]]; then
+        load_bot_conf "$name"
+        state="$(bot_state "$name")"
+        printf '%-14s %-24s %-28s %s\n' "$name" "$BOT_USER@$BOT_HOST" "$MOUNT_POINT" "$state"
+        case "$state" in
+            unreachable)
+                printf '\n%s\n' "$name is unreachable: the robot is powered off, off wifi, or out of range."
+                printf '%s\n' "Check the robot. Do not retry the failed operation until it is back."
+                return 1 ;;
+            stale)
+                printf '\n%s\n' "$name is mounted but not responding. Reads against $MOUNT_POINT will block."
+                printf '%s\n' "Once the robot is back: 'bot down -f $name' then 'bot up $name'. Once, not repeatedly."
+                return 2 ;;
+        esac
+        return 0
+    fi
+
+    local any=0
+    printf '%-14s %-24s %-28s %s\n' NAME HOST MOUNT STATE
+    while read -r name; do
+        any=1
+        if ! ( BOTKIT_LENIENT_CONF=1 load_bot_conf "$name" ) >/dev/null 2>&1; then
+            printf '%-14s %-24s %-28s %s\n' "$name" '-' '-' 'bad config'
+            rc=1
+            continue
+        fi
+        BOTKIT_LENIENT_CONF=1 load_bot_conf "$name"
+        if [[ -z $REMOTE_MOUNT ]]; then
+            printf '%-14s %-24s %-28s %s\n' "$name" "$BOT_USER@$BOT_HOST" "${MOUNT_POINT:--}" 'no REMOTE_MOUNT set'
+            continue
+        fi
+        printf '%-14s %-24s %-28s %s\n' "$name" "$BOT_USER@$BOT_HOST" "$MOUNT_POINT" "$(bot_state "$name")"
+    done < <(list_bots)
+
+    (( any )) || info "no bots configured. Copy bots/example.conf to bots/<name>.conf to add one."
+    return "$rc"
+}
+
+# ----------------------------------------------------------------- probe ----
+
+# Gather evidence about the robot's layout so that whoever is setting up this
+# bot -- human or agent -- can choose REMOTE_MOUNT deliberately.
+#
+# This deliberately does not pick a directory. The right answer depends on how
+# that particular robot is organised, and guessing it is how you end up mounting
+# a home directory full of bag files and wondering why every search is slow.
+cmd_probe() {
+    local name="${1:-}"
+    [[ -n $name ]] || die "usage: bot probe <name>"
+
+    BOTKIT_LENIENT_CONF=1 load_bot_conf "$name"
+
+    bot_reachable "$BOT_USER" "$BOT_HOST" ||
+        die "$BOT_USER@$BOT_HOST is unreachable. The robot is probably powered off or off wifi — check it before retrying."
+
+    info "probing $BOT_USER@$BOT_HOST (read-only, writes nothing to the robot)"
+    info ""
+
+    # Piped to bash over stdin: no script file ever lands on the robot's disk.
+    timeout -k 5 120 ssh -o BatchMode=yes -o ConnectTimeout=10 \
+        "$BOT_USER@$BOT_HOST" 'bash -s' <<'REMOTE'
+set -u
+echo "## host"
+echo "hostname: $(hostname)"
+echo "kernel:   $(uname -sr)"
+echo "home:     $HOME"
+echo "ros:      $(ls -1 /opt/ros 2>/dev/null | tr '\n' ' ')"
+echo
+
+echo "## top-level sizes under \$HOME"
+timeout 60 du -x -h --max-depth=1 "$HOME" 2>/dev/null | sort -h | tail -20
+echo
+
+echo "## candidate ROS 2 workspaces (a dir containing src/)"
+find "$HOME" -maxdepth 4 -type d -name src -not -path '*/build/*' -not -path '*/install/*' 2>/dev/null |
+  while read -r s; do
+    ws="$(dirname "$s")"
+    printf '%s\n' "$ws"
+    for d in build install log; do
+      [ -d "$ws/$d" ] && printf '    %-8s %s\n' "$d" "$(timeout 30 du -x -sh "$ws/$d" 2>/dev/null | cut -f1)"
+    done
+    printf '    %-8s %s\n' "packages" "$(find "$ws/src" -maxdepth 3 -name package.xml 2>/dev/null | wc -l)"
+  done
+echo
+
+echo "## recorded data under \$HOME"
+printf 'bag/mcap files: %s\n' "$(find "$HOME" -type f \( -name '*.bag' -o -name '*.mcap' -o -name '*.db3' \) 2>/dev/null | wc -l)"
+printf 'model weights:  %s\n' "$(find "$HOME" -type f \( -name '*.pt' -o -name '*.onnx' -o -name '*.engine' \) 2>/dev/null | wc -l)"
+echo
+
+echo "## search cost"
+printf 'files under $HOME:        %s\n' "$(timeout 60 find "$HOME" -xdev -type f 2>/dev/null | wc -l)"
+printf 'files excluding artifacts: %s\n' "$(timeout 60 find "$HOME" -xdev -type f \
+   -not -path '*/build/*' -not -path '*/install/*' -not -path '*/log/*' \
+   -not -path '*/.git/*' -not -path '*/.cache/*' -not -path '*/.ros/*' 2>/dev/null | wc -l)"
+REMOTE
+
+    local rc=$?
+    (( rc == 0 )) || warn "probe exited $rc (a timeout here usually means a very large home directory, which is itself an answer)"
+
+    cat <<EOF
+
+---
+Now choose REMOTE_MOUNT for '$name' and put it in $BOTS_DIR/$name.conf.
+
+There is no default. Weigh it for this robot:
+
+  * A workspace directory keeps searches fast and scoped, and is the better
+    choice when the numbers above show a large or artifact-heavy home.
+  * The home directory is robust when you do not yet know the layout, or when
+    work spans more than one workspace. It costs search breadth, which
+    SEARCH_EXCLUDE has to contain.
+
+Whichever you pick, write down why in ~/dev/notes/$name/decisions.md. The next
+person to look at this — including the next agent — cannot recover the reason
+from the config file alone.
+EOF
+}
+
+# ------------------------------------------------------------------ main ----
+
+main() {
+    local cmd="${1:-}"
+    [[ $# -gt 0 ]] && shift
+
+    case "$cmd" in
+        up)              cmd_up "$@" ;;
+        down)            cmd_down "$@" ;;
+        run)             cmd_run "$@" ;;
+        build)           cmd_build "$@" ;;
+        notes)           [[ -n ${1:-} ]] || die "usage: bot notes <name>"; seed_notes "$1" ;;
+        status)          cmd_status "$@" ;;
+        probe)           cmd_probe "$@" ;;
+        help|-h|--help)  usage ;;
+        '')              usage >&2; exit 2 ;;
+        *)               printf 'unknown command: %s\n\n' "$cmd" >&2; usage >&2; exit 2 ;;
+    esac
+}
+
+main "$@"

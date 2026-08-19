@@ -1,0 +1,16 @@
+# Scratch and machine-specific files. Notes themselves are always tracked.
+*.tmp
+*.swp
+*.bak
+*~
+.DS_Store
+scratch/
+.scratch/
+*.local.md
+
+# Never let a mount, a bag, or a model weight end up committed here.
+*.bag
+*.mcap
+*.db3
+*.pt
+*.onnx
