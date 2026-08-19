@@ -18,6 +18,14 @@ failed copy is visible immediately.
 | `bro` | cursor/plugins | **by name only** |
 | mattpocock skills | plugin marketplace | varies |
 
+Skills install to `~/.claude/skills/<name>/SKILL.md`, the personal skills
+location, so they are available across every project.
+
+**After a first install, restart Claude Code.** It watches `~/.claude/skills/`
+and picks up added or edited skills live — but only in a directory that existed
+when the session started, and on a first install it did not. `install.sh` says
+so when it creates the directory.
+
 ---
 
 ## `wiring`

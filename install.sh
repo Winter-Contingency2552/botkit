@@ -480,6 +480,13 @@ apply_exclusions() {
 # ----------------------------------------------------------------- main ----
 
 main() {
+    # Claude Code only watches a skills directory that existed when the session
+    # started. On a first install it never does, so the new skills stay
+    # invisible until a restart. Detect that here rather than letting the user
+    # discover it by wondering why nothing loaded.
+    local skills_dir_existed=0
+    [[ -d $SKILLS_DIR ]] && skills_dir_existed=1
+
     printf '%sbotkit%s — installing into %s\n\n' "$C_BOLD" "$C_RESET" "$HOME"
     (( DRY_RUN )) && info "dry run: nothing will be written" && info ""
 
@@ -513,6 +520,17 @@ main() {
         printf "  - %s\n" "${CHANGED[@]}"
     else
         info "Nothing changed. Everything was already in place."
+    fi
+
+    if (( ! skills_dir_existed && ! DRY_RUN )); then
+        printf '\n%s%sRestart Claude Code before the new skills load.%s\n' \
+            "$C_BOLD" "$C_YELLOW" "$C_RESET"
+        cat <<'EOF'
+  ~/.claude/skills/ did not exist when your current session started, so Claude
+  Code is not watching it. Skills added later are normally picked up live, but
+  only in a directory that was there at startup. Quit and restart, then check
+  with /context or /skills.
+EOF
     fi
 
     printf '\n%sStill yours to do:%s\n' "$C_BOLD" "$C_RESET"

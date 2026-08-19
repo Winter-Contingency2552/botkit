@@ -178,6 +178,26 @@ echo '{"tool_input":{"file_path":"/home/you/dev/notes/x/architecture.md"}}' \
   | ./hooks/unslop-gate.sh
 ```
 
+**Claude Code does not see the skills after installing.** Restart it. This is
+the expected behaviour on a first install, not a failure.
+
+Claude Code watches `~/.claude/skills/` for changes and normally picks up new
+skills live, without a restart — but only if that directory existed when the
+session started. On a first install it does not exist, so nothing is watching
+it, and the skills stay invisible until you quit and restart. Check with
+`/context` or `/skills` afterwards.
+
+The same applies to the mattpocock plugin: plugin changes need a restart or
+`/reload-plugins`.
+
+Confirm they are on disk and well-formed in the meantime:
+
+```bash
+ls ~/.claude/skills/
+claude plugin validate ~/.claude/skills
+cat ~/.claude/skills/.botkit-provenance
+```
+
 **A skill is missing.** `install.sh` lists which skill directories exist at the
 end of every run. Re-run it; a network failure during the clone is the usual
 cause. `cat ~/.claude/skills/.botkit-provenance` shows what was installed from
