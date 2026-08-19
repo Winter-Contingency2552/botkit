@@ -168,6 +168,10 @@ live system contradicts a recorded decision. A topic that was supposed to be
 removed, a QoS setting that was chosen deliberately and is now something else, a
 node that was meant to be merged into another.
 
+If another robot already has notes, read those too. They live under
+`~/dev/notes/` on this laptop; that robot does not have to be mounted. Reuse
+what still applies, and write what differs into this repo's `decisions.md`.
+
 **That contradiction is worth more than the map.** Lead with it.
 
 ## Writing it down

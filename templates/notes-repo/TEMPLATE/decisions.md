@@ -27,7 +27,9 @@ Date:
 Status: accepted
 
 Context: `REMOTE_MOUNT` has no default. The choice trades search speed against
-coverage, and `bot probe` reports the numbers for this specific robot.
+coverage, and `bot probe` reports the numbers for this specific robot. If a
+similar robot already has this decision recorded, say what you reused and what
+differs.
 
 Decision: <workspace path or home directory>
 

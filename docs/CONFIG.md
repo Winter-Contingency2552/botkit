@@ -9,14 +9,14 @@ Shell-sourceable `KEY=value`, no logic. One file per robot. `bots/.gitignore`
 ignores every `*.conf` except `example.conf`, so your real configs stay out of
 the public repo.
 
-The filename is authoritative: `bots/smartbot.conf` must set
-`BOT_NAME=smartbot`. `bot` refuses to run if they disagree, because a mismatch
+The filename is authoritative: `bots/robot.conf` must set
+`BOT_NAME=robot`. `bot` refuses to run if they disagree, because a mismatch
 means one of the two is a typo and guessing which is worse than stopping.
 
 | Field | Required | Default | What it does |
 |---|---|---|---|
 | `BOT_NAME` | no | the filename | Local nickname. Must match the filename if set. Not a login. |
-| `BOT_HOST` | **yes** | none | Hostname or IP. `smartbot.local` works if mDNS does. |
+| `BOT_HOST` | **yes** | none | Hostname or IP. `robot.local` works if mDNS does. |
 | `BOT_USER` | **yes** | none | Linux account on the robot. `ssh` and `sshfs` log in as `BOT_USER@BOT_HOST`. Often a shared account such as `team`, not your laptop username. |
 | `REMOTE_MOUNT` | **yes** | none | Absolute path on the robot to mount. See below. |
 | `MOUNT_POINT` | no | `$HOME/dev/<name>` | Where it appears locally. Absolute. |
@@ -30,7 +30,7 @@ The file is sourced by bash, so `$HOME` and earlier variables expand. That is wh
 
 ### `BOT_USER` and `BOT_HOST`
 
-A robot prompt like `smartbot@smartbot10` is `BOT_USER@hostname`. `BOT_USER` is
+A robot prompt like `user@robot` is `BOT_USER@hostname`. `BOT_USER` is
 the Linux login (`whoami` on the robot). `BOT_HOST` is whichever of `hostname`,
 `hostname.local`, or an IP actually answers from the laptop (`ping -c1` each).
 
@@ -144,8 +144,8 @@ entries never stack up. Other hooks in your settings are left alone.
 
 | Config entry | Generated rule |
 |---|---|
-| `build` | `Read(//home/you/dev/mybot/**/build/**)` |
-| `*.bag` | `Read(//home/you/dev/mybot/**/*.bag)` |
+| `build` | `Read(//home/you/dev/robot/**/build/**)` |
+| `*.bag` | `Read(//home/you/dev/robot/**/*.bag)` |
 
 Only `Read` rules are generated, and that is not an oversight. `Read` deny rules
 cover Read, Grep, and Glob, block Edit and Write on the same path, and apply to
@@ -248,7 +248,7 @@ are listed in `AGENTS.md` instead, and the capability report says `written down`
 Generated. Holds the mount points and exclusion globs the hook needs:
 
 ```bash
-BOTKIT_MOUNTS=( /home/you/dev/mybot )
+BOTKIT_MOUNTS=( /home/you/dev/robot )
 BOTKIT_EXCLUDES=( build install log .ros bags '*.bag' ... )
 ```
 

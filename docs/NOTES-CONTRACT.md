@@ -114,6 +114,10 @@ drifted from it. Both are worth knowing, and neither is fixed by editing
 ## What agents are expected to do
 
 - Read `decisions.md` before working in a repo, then `progress.md`.
+- When a robot is similar to one already noted, read that robot's
+  `decisions.md` as well. Notes live on the laptop; the other robot does not
+  have to be mounted. Write what you reused, and what differs, into this
+  robot's `decisions.md`.
 - Append to `progress.md` at the end of a session; roll up old entries when it
   gets long.
 - Offer to write `architecture.md`; never write it unasked.

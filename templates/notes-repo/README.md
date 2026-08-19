@@ -27,7 +27,9 @@ has an audience, because one day it will.
 ```
 
 One directory per repo, whether or not that repo lives on a robot. `bot notes
-<name>` creates one.
+<name>` creates one. When two robots are similar, read both `decisions.md`
+files. Notes stay on this laptop, so the other robot does not have to be
+mounted.
 
 ## The short version of the contract
 

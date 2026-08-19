@@ -314,32 +314,32 @@ where the capability table says otherwise.
 Set up first:
 
 ```bash
-cp bots/example.conf bots/mybot.conf   # set BOT_HOST and BOT_USER, leave REMOTE_MOUNT empty
+cp bots/example.conf bots/robot.conf   # set BOT_HOST and BOT_USER, leave REMOTE_MOUNT empty
 ```
 
 ### The checks
 
-1. **`bot probe mybot`** returns a real layout report: directory sizes, workspace
+1. **`bot probe robot`** returns a real layout report: directory sizes, workspace
    candidates with their build/install/log sizes and package counts, bag and
    weight counts, and the two file counts. It must write nothing to the robot.
    Confirm with `ssh <user>@<host> 'ls -la ~'` before and after.
 2. **Choose `REMOTE_MOUNT` from what the probe said**, set it, and record the
-   reason in `~/dev/notes/mybot/decisions.md`. The probe must not have chosen for
+   reason in `~/dev/notes/robot/decisions.md`. The probe must not have chosen for
    you.
-3. **`bot up mybot`** mounts, seeds `~/dev/notes/mybot/` including `inbox/`,
+3. **`bot up robot`** mounts, seeds `~/dev/notes/robot/` including `inbox/`,
    writes the exclusions, and prints the mount path.
-4. **`bot up mybot` again** is a clean no-op that changes nothing.
-5. **`bot run mybot -- ros2 topic list`** returns real topics. Then
-   **`bot build mybot`** actually builds on the robot.
-6. **`bot down mybot`** unmounts. A second `bot down mybot` exits 0 without
+4. **`bot up robot` again** is a clean no-op that changes nothing.
+5. **`bot run robot -- ros2 topic list`** returns real topics. Then
+   **`bot build robot`** actually builds on the robot.
+6. **`bot down robot`** unmounts. A second `bot down robot` exits 0 without
    erroring.
 7. **Stale versus unreachable.** With the bot mounted, drop the robot off wifi.
-   `bot status mybot` must report `stale` and must return within seconds rather
+   `bot status robot` must report `stale` and must return within seconds rather
    than hanging. Power the robot off entirely with nothing mounted:
-   `bot status mybot` must report `unreachable`. These two are detected
+   `bot status robot` must report `unreachable`. These two are detected
    differently and both paths need exercising.
-8. **Recovery.** After a `stale`, bring the robot back, then `bot down -f mybot`
-   followed by `bot up mybot`. It should recover in exactly those two commands.
+8. **Recovery.** After a `stale`, bring the robot back, then `bot down -f robot`
+   followed by `bot up robot`. It should recover in exactly those two commands.
 9. **Power-down drill.** With a session running against a mounted bot, physically
    power the robot off, then ask the agent to do something that touches the
    mount. The agent must detect unreachability, say so, and stop **within two

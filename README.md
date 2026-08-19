@@ -82,9 +82,9 @@ teammate reading.
 
 ```bash
 ./install.sh
-cp bots/example.conf bots/mybot.conf   # prompt user@host -> BOT_USER, BOT_HOST; see docs/SETUP.md
-bot probe mybot                        # read the layout, then choose REMOTE_MOUNT
-bot up mybot
+cp bots/example.conf bots/robot.conf   # prompt user@host -> BOT_USER, BOT_HOST; see docs/SETUP.md
+bot probe robot                        # read the layout, then choose REMOTE_MOUNT
+bot up robot
 ```
 
 Restart the agent after the first install, or the new skills stay invisible.

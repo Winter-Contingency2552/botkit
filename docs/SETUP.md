@@ -20,7 +20,7 @@ You also want key-based ssh to each robot. `bot` runs ssh with `BatchMode=yes`,
 so a password prompt is a failure, not a prompt.
 
 ```bash
-ssh-copy-id team@robot.local
+ssh-copy-id user@robot.local
 ```
 
 ## Install
@@ -88,34 +88,34 @@ skipped.
 ## Your first bot
 
 ```bash
-cp bots/example.conf bots/mybot.conf
+cp bots/example.conf bots/robot.conf
 ```
 
 Edit three fields. Leave `REMOTE_MOUNT` empty for now.
 
 | Field | What to put |
 |---|---|
-| `BOT_NAME` | Same as the filename. `bots/smartbot10.conf` means `BOT_NAME=smartbot10`. This is a local nickname, not a login. |
+| `BOT_NAME` | Same as the filename. `bots/robot.conf` means `BOT_NAME=robot`. This is a local nickname, not a login. |
 | `BOT_HOST` | Whatever you put after `@` in `ssh`. Hostname, `hostname.local`, or an IP. See below. |
 | `BOT_USER` | The Linux account on the robot, the part before `@` on the robot's prompt. Often a shared account, not the username on this laptop. |
 
 ### Reading the robot's prompt
 
-A typical prompt is `user@hostname`. If the robot shows `smartbot@smartbot10`:
+A typical prompt is `user@hostname`. If the robot shows `user@robot`:
 
 | Prompt | Field | Value |
 |---|---|---|
-| `smartbot` (before `@`) | `BOT_USER` | `smartbot` |
-| `smartbot10` (after `@`) | `BOT_HOST` | `smartbot10`, or `smartbot10.local`, or the IP |
-| (you pick) | `BOT_NAME` | usually `smartbot10`, matching `bots/smartbot10.conf` |
+| `user` (before `@`) | `BOT_USER` | `user` |
+| `robot` (after `@`) | `BOT_HOST` | `robot`, or `robot.local`, or the IP |
+| (you pick) | `BOT_NAME` | usually `robot`, matching `bots/robot.conf` |
 
 On the robot, `whoami` is `BOT_USER` and `hostname` is the machine's name.
 
-**`.local` is not added by botkit.** It is mDNS (Avahi on Ubuntu, Bonjour on Mac). A machine named `smartbot10` can advertise itself as `smartbot10.local` on the LAN so you do not need a DNS server. Use whichever form actually reaches the robot from the laptop:
+**`.local` is not added by botkit.** It is mDNS (Avahi on Ubuntu, Bonjour on Mac). A machine named `robot` can advertise itself as `robot.local` on the LAN so you do not need a DNS server. Use whichever form actually reaches the robot from the laptop:
 
 ```bash
-ping -c1 smartbot10
-ping -c1 smartbot10.local
+ping -c1 robot
+ping -c1 robot.local
 ```
 
 Whichever one replies is `BOT_HOST`. If both fail, use the IP. `BOT_HOST` is just the string you put after `ssh user@`.
@@ -123,8 +123,8 @@ Whichever one replies is `BOT_HOST`. If both fail, use the IP. `BOT_HOST` is jus
 You need key-based ssh as that user before `bot probe` will work:
 
 ```bash
-ssh-copy-id smartbot@smartbot10        # or smartbot@smartbot10.local
-ssh smartbot@smartbot10 true           # must succeed without a password
+ssh-copy-id user@robot        # or user@robot.local
+ssh user@robot true           # must succeed without a password
 ```
 
 ### Choosing REMOTE_MOUNT
@@ -133,7 +133,7 @@ There is no default, on purpose. What to mount depends on how that robot is laid
 out, and a bad guess is paid for on every search you ever run against it.
 
 ```bash
-bot probe mybot
+bot probe robot
 ```
 
 That connects over ssh, writes nothing to the robot, and reports:
@@ -147,32 +147,32 @@ That connects over ssh, writes nothing to the robot, and reports:
 
 Then decide:
 
-- **A workspace** (`/home/team/ws`) keeps searches fast and scoped. Right when
+- **A workspace** (`/home/user/ws`) keeps searches fast and scoped. Right when
   the probe shows a large home directory, a lot of recorded data, or work that
   only ever happens in one place.
-- **The home directory** (`/home/team`) is robust when you do not know the
+- **The home directory** (`/home/user`) is robust when you do not know the
   layout yet, when config outside the workspace matters, or when work spans
   several workspaces. It costs search breadth, which `SEARCH_EXCLUDE` contains.
 
 Put the answer in `REMOTE_MOUNT` and the reason in
-`~/dev/notes/mybot/decisions.md`. The config file records what you chose; only
+`~/dev/notes/robot/decisions.md`. The config file records what you chose; only
 the notes record why.
 
 ### Bring it up
 
 ```bash
-bot up mybot
+bot up robot
 ```
 
-Mounts it, seeds `~/dev/notes/mybot/`, writes the search exclusions, regenerates
+Mounts it, seeds `~/dev/notes/robot/`, writes the search exclusions, regenerates
 the marked block in `AGENTS.md`, and prints the mount path. Running it twice is
 a no-op.
 
 ```bash
-bot run mybot -- ros2 topic list
-bot build mybot
+bot run robot -- ros2 topic list
+bot build robot
 bot status
-bot down mybot
+bot down robot
 ```
 
 ## Search latency
@@ -183,10 +183,10 @@ rather than assuming:
 
 ```bash
 # everything
-time rg --files ~/dev/mybot | wc -l
+time rg --files ~/dev/robot | wc -l
 
 # with the exclusions this bot actually uses
-time rg --files ~/dev/mybot \
+time rg --files ~/dev/robot \
   -g '!build' -g '!install' -g '!log' -g '!.ros' -g '!bags' \
   -g '!*.bag' -g '!*.mcap' -g '!*.pt' -g '!*.onnx' -g '!.cache' -g '!.git' | wc -l
 ```
@@ -206,18 +206,18 @@ and write down why in that robot's `decisions.md`.
 **`bot up` says unreachable.** The robot is off, off wifi, or out of range.
 Check the robot. This is the common case, not the exception.
 
-**`ls ~/dev/mybot` hangs forever.** The mount is wedged. The connection dropped
-while it was mounted. `bot status mybot` reports `stale` without hanging, because
+**`ls ~/dev/robot` hangs forever.** The mount is wedged. The connection dropped
+while it was mounted. `bot status robot` reports `stale` without hanging, because
 it reads `/proc/mounts` instead of touching the mount. Once the robot is back:
-`bot down -f mybot` then `bot up mybot`. Once.
+`bot down -f robot` then `bot up robot`. Once.
 
 **`bot up` refuses because the mount point is not empty.** Something is already
-in `~/dev/mybot/` that is not a mount. Mounting over it would hide it. Look at
+in `~/dev/robot/` that is not a mount. Mounting over it would hide it. Look at
 what is there and move it before retrying.
 
 **`bot run` fails with "command not found" for a ROS tool.** `SOURCE_CMD` in the
 bot config is wrong for that robot. Check the ROS distro and the workspace path:
-`bot run mybot -- 'ls /opt/ros'`.
+`bot run robot -- 'ls /opt/ros'`.
 
 **A password prompt appears.** ssh keys are not set up. `ssh-copy-id
 <user>@<host>`.
