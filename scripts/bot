@@ -18,7 +18,7 @@ usage() {
     cat <<'USAGE'
 usage: bot <command> [args]
 
-  bot up <name>            mount the robot, seed its notes, apply search exclusions
+  bot up <name>            create ~/dev/<name>/, mount the robot, seed notes
   bot down [-f] <name>     unmount cleanly (-f forces a lazy unmount of a wedged mount)
   bot run <name> -- <cmd>  run a command on the robot with ROS sourced
   bot build <name>         run the config's BUILD_CMD on the robot
@@ -69,35 +69,8 @@ cmd_up() {
     [[ -n $name ]] || die "usage: bot up <name>"
     load_bot_conf "$name"
 
-    if is_mounted "$MOUNT_POINT"; then
-        if mount_live "$MOUNT_POINT"; then
-            skip "already mounted: $MOUNT_POINT"
-        else
-            die "$MOUNT_POINT is mounted but not responding (stale). Run 'bot down -f $name' once the robot is back up, then 'bot up $name'."
-        fi
-    else
-        bot_reachable "$BOT_USER" "$BOT_HOST" ||
-            die "$BOT_USER@$BOT_HOST is unreachable. The robot is probably powered off or off wifi — check it before retrying."
-
-        mkdir -p -- "$MOUNT_POINT" || die "cannot create mount point $MOUNT_POINT"
-
-        # A non-empty directory means something is already there. Mounting over
-        # it would hide it, which is how people lose local files.
-        if [[ -n "$(ls -A -- "$MOUNT_POINT" 2>/dev/null)" ]]; then
-            die "$MOUNT_POINT is not empty and not a mount — refusing to mount over existing files"
-        fi
-
-        sshfs -o "$SSHFS_OPTS" \
-            "$BOT_USER@$BOT_HOST:$REMOTE_MOUNT" "$MOUNT_POINT" ||
-            die "sshfs failed to mount $BOT_USER@$BOT_HOST:$REMOTE_MOUNT"
-
-        # Never trust sshfs's exit code alone. A partial mount that reports
-        # success and then blocks is the failure this guards against.
-        if ! is_mounted "$MOUNT_POINT" || ! mount_live "$MOUNT_POINT"; then
-            fusermount -u -- "$MOUNT_POINT" >/dev/null 2>&1
-            die "mount did not come up cleanly at $MOUNT_POINT — nothing left mounted"
-        fi
-        ok "mounted $BOT_USER@$BOT_HOST:$REMOTE_MOUNT -> $MOUNT_POINT"
+    if is_mounted "$BOT_DIR" && [[ $MOUNT_POINT != "$BOT_DIR" ]]; then
+        die "$BOT_DIR is a mount from an older layout. Run 'bot down $name', then 'bot up $name'. The mount will sit at $MOUNT_POINT."
     fi
 
     seed_notes "$name"
@@ -107,13 +80,48 @@ cmd_up() {
         seed_notes "$repo"
     done
 
+    ensure_bot_workspace
+
+    if is_mounted "$MOUNT_POINT"; then
+        if mount_live "$MOUNT_POINT"; then
+            skip "already mounted: $MOUNT_POINT"
+        else
+            die "$MOUNT_POINT is mounted but not responding (stale). Run 'bot down -f $name' once the robot is back up, then 'bot up $name'."
+        fi
+    else
+        if bot_reachable "$BOT_USER" "$BOT_HOST"; then
+            mkdir -p -- "$MOUNT_POINT" || die "cannot create mount point $MOUNT_POINT"
+
+            # A non-empty directory means something is already there. Mounting over
+            # it would hide it, which is how people lose local files.
+            if [[ -n "$(ls -A -- "$MOUNT_POINT" 2>/dev/null)" ]]; then
+                die "$MOUNT_POINT is not empty and not a mount — refusing to mount over existing files"
+            fi
+
+            sshfs -o "$SSHFS_OPTS" \
+                "$BOT_USER@$BOT_HOST:$REMOTE_MOUNT" "$MOUNT_POINT" ||
+                die "sshfs failed to mount $BOT_USER@$BOT_HOST:$REMOTE_MOUNT"
+
+            # Never trust sshfs's exit code alone. A partial mount that reports
+            # success and then blocks is the failure this guards against.
+            if ! is_mounted "$MOUNT_POINT" || ! mount_live "$MOUNT_POINT"; then
+                fusermount -u -- "$MOUNT_POINT" >/dev/null 2>&1
+                die "mount did not come up cleanly at $MOUNT_POINT — nothing left mounted"
+            fi
+            ok "mounted $BOT_USER@$BOT_HOST:$REMOTE_MOUNT -> $MOUNT_POINT"
+        else
+            warn "$BOT_USER@$BOT_HOST is unreachable. Project is at $BOT_DIR, not mounted. Bring the robot up and run 'bot up $name' again."
+        fi
+    fi
+
     select_agents
     apply_generic_agent
     apply_selected_agents
+    ensure_bot_workspace
 
     write_unslop_conf
 
-    printf '%s\n' "$MOUNT_POINT"
+    printf '%s\n' "$BOT_DIR"
 }
 
 # ------------------------------------------------------------------ down ----

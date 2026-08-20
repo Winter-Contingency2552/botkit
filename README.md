@@ -16,21 +16,19 @@ Builds and launches run on the robot over ssh.
 laptop                                robot
 ------                                -----
 agent, credential, skills, notes  ->  ssh  ->  builds, launches, ros2 introspection
-~/dev/<bot>/  <-- sshfs mount --------------  /home/<user>  (the only copy of the code)
+~/dev/<bot>/mount  <-- sshfs mount ----------  /home/<user>  (the only copy of the code)
 ```
 
 Adding a second or third robot is one config file.
 
 ## Two directories
 
-`~/botkit` is this repo, and it is public. `~/dev` is the working root
-`install.sh` creates. Every robot mounts at `~/dev/<name>`. A second bot is a
-second subdirectory, not a second `~/dev`.
+`~/botkit` is this repo, and it is public. `~/dev` holds one laptop project
+per robot, created by `bot up`. The mount is `~/dev/<name>/mount`. A second
+bot is `~/dev/<other>/`, not a second `~/dev`.
 
-Start the agent from `~/dev`, never from this checkout and never from a
-mount. Agents load `AGENTS.md` or `CLAUDE.md` from the directory you start
-them in. One session there sees every mount, every local clone, and
-`notes/`. Why they stay apart is in
+Start the agent from `~/dev/<name>/`, never from this checkout and never
+from `mount/`. Why they stay apart is in
 [docs/SETUP.md](docs/SETUP.md#where-things-live).
 
 The installer works with Claude Code, Cursor, and Codex, and writes `AGENTS.md`
@@ -65,10 +63,9 @@ where it oversells itself.
 prose without being asked, on agents that can inject hook context.
 
 **Matt Pocock's skills.** Claude Code plugin only. Grilling, specs, TDD, review,
-and the rest of a real engineering workflow. Not ROS. Run
-`/setup-matt-pocock-skills` once from `~/dev` or a laptop clone, never from this
-checkout and never from a mount. What each skill is for is in
-[docs/SKILLS.md](docs/SKILLS.md).
+and the rest of a real engineering workflow. Not ROS. Per-repo config lives in
+`~/dev/notes/<repo>/agents/`, not in `~/dev` and not on a mount. What each
+skill is for is in [docs/SKILLS.md](docs/SKILLS.md).
 
 ## The notes contract
 
@@ -165,7 +162,7 @@ connectivity reasons, stop and report.** That is the whole procedure.
 ## The other rules
 
 - **Never write anything to a mount point** except source the task requires.
-  `~/dev/<bot>/` is the robot's disk. Anything you leave there, teammates see.
+  `~/dev/<bot>/mount/` is the robot's disk. Anything you leave there, teammates see.
   Notes go under `~/dev/notes/`, always.
 - **Never search paths listed in that bot's `SEARCH_EXCLUDE`.** Claude Code
   denies them. Other agents are told in `AGENTS.md`. Reaching around either
@@ -184,6 +181,6 @@ connectivity reasons, stop and report.** That is the whole procedure.
   layout and search-cost numbers it reports for that robot, choose deliberately,
   and record the reason in `notes/<name>/decisions.md`. Timed search counts go
   in that same file. Never in the botkit checkout.
-- **A GUI that belongs with a bot lives at `~/dev/<repo>/`.** Same for any other
+- **A GUI that belongs with a bot lives at `~/dev/<bot>/<repo>/`.** Same for any other
   laptop clone. List it in that bot's `LOCAL_REPOS`. The generated block in
   `AGENTS.md` names the link. Never clone into a mount.

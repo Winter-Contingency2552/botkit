@@ -32,7 +32,8 @@ cd ~/botkit
 ```
 
 Clone it to `~/botkit`, not under `~/dev`. `install.sh` creates `~/dev` next
-to this checkout. Why they are two directories is in
+to this checkout. `bot up <name>` creates `~/dev/<name>/` as that robot's
+laptop project. Why they stay apart is in
 [Where things live](#where-things-live).
 
 Options:
@@ -95,48 +96,51 @@ are skipped.
 this laptop. botkit stays at `~/botkit`, next to it, never inside it.
 
 ```
-~/botkit/              this repo. Public. Installer, `bot`, docs, example.conf.
-~/dev/                 created by install.sh. Start the agent here.
-  AGENTS.md            rules. The generated block lists every bot.
-  CLAUDE.md            symlink to AGENTS.md. Claude Code reads this name.
-  notes/               its own git repo. One directory per robot or local clone.
-  robot/               sshfs mount. Appears at `bot up robot`.
-  other-robot/         another mount. Same ~/dev, second conf.
-  gui/                 a laptop clone. Not a mount. Listed in LOCAL_REPOS.
+~/botkit/                 this repo. Public. Installer, `bot`, docs, example.conf.
+~/dev/                    created by install.sh.
+  AGENTS.md               rules for every bot. Each project folder symlinks this.
+  CLAUDE.md               symlink to AGENTS.md
+  notes/                  its own git repo. One directory per robot or local clone.
+  robot/                  laptop project. Created by `bot up robot`. Not a mount.
+    mount/                sshfs. The robot's disk.
+    gui/                  a laptop clone, if LOCAL_REPOS=gui
+    notes                 symlink to ../notes/robot
 ```
 
 **Two directories, not one.** botkit is a public clone. Hostnames, probe
-output, search timings, and notes must not land in it. `~/dev` is the private
-working tree. `notes/` is a second git repo, on purpose. Nesting either repo
-inside the other mixes public installer code with private robot facts, and
-makes uninstall delete the wrong thing.
+output, search timings, and notes must not land in it. `~/dev` holds a
+laptop project per robot. `notes/` is a second git repo, on purpose. Nesting
+either repo inside botkit mixes public installer code with private robot
+facts, and makes uninstall delete the wrong thing.
 
-If botkit lived under `~/dev`, an agent rooted at `~/dev` would see this
-checkout as just another project and write those facts into it. That is the
-failure this split exists to prevent. Keep the clone at `~/botkit`. If you
-move it, `~/.local/bin/bot` and the hook paths break until you re-run
+If botkit lived under `~/dev`, an agent rooted at a bot project would see
+this checkout as just another project and write those facts into it. That is
+the failure this split exists to prevent. Keep the clone at `~/botkit`. If
+you move it, `~/.local/bin/bot` and the hook paths break until you re-run
 `./install.sh`.
 
-**One `~/dev`, every bot.** A second robot is `bots/other.conf` plus
-`bot up other`. That adds `~/dev/other` and `~/dev/notes/other`. It does not
-create a second `~/dev`. `MOUNT_POINT` defaults to `$HOME/dev/<name>`. Leave
-that unless you have a reason, and if you do, write the reason in that
+**One `~/dev`, a folder per bot.** A second robot is `bots/other.conf` plus
+`bot up other`. That adds `~/dev/other/` with its own `mount/`. It does not
+create a second `~/dev`. `MOUNT_POINT` defaults to `$HOME/dev/<name>/mount`.
+Leave that unless you have a reason, and if you do, write the reason in that
 robot's notes.
 
-**What `~/dev` actually does.** It is a directory, not a program. Agents load
+**What `~/dev/<bot>` actually does.** It is the project root. Agents load
 `AGENTS.md` or `CLAUDE.md` from the directory you start them in. Start from
-`~/dev` and one session sees every mount, every local clone, and every notes
-directory, plus the generated rules that name the links. Start from
-`~/botkit` and the session sees the installer, not the robots. Start from
-`~/dev/robot` and the session is rooted on the mount. Notes sit outside the
-project. Anything the agent writes lands on the robot.
+`~/dev/robot` and one session sees that mount, that GUI, and that notes
+directory. Start from `~/dev` only when you need every robot at once. Start
+from `~/dev/robot/mount` and the session is rooted on the robot's disk.
+Anything the agent writes there lands on the robot.
 
 ```bash
-cd ~/dev
+cd ~/dev/robot
 ```
 
-Then start Claude Code, Cursor, or Codex there. `install.sh` and `bot up`
-keep `CLAUDE.md` as a symlink to `AGENTS.md`. You do not run `ln` by hand.
+Then start Claude Code, Cursor, or Codex there.
+
+Matt Pocock's skills look for files in the project root. `bot up` puts
+`docs/agents/`, `.scratch/`, and `CONTEXT.md` in `~/dev/<bot>/` as symlinks
+into `~/dev/notes/<bot>/`. Do not create those under `mount/`.
 
 ## Your first bot
 
@@ -255,19 +259,15 @@ bot down robot
 
 ## A GUI that belongs with this robot
 
-Robot source stays on the robot, mounted at `~/dev/robot/`. A GUI is the
-opposite. It runs on the laptop, so it is an ordinary git clone on the laptop.
-The agent still needs to know the two belong together.
-
-Clone it next to the mount, never inside it.
+Robot source stays on the robot, mounted at `~/dev/robot/mount/`. A GUI is
+the opposite. It runs on the laptop, so it is an ordinary git clone inside
+the laptop project, next to the mount, never inside it.
 
 ```bash
-git clone <gui-url> ~/dev/gui
+git clone <gui-url> ~/dev/robot/gui
 ```
 
-`~/dev/gui` is a local repo. `~/dev/robot` is the mount. Mixing those up writes
-the GUI onto the robot's disk, which is the thing this whole layout exists to
-avoid.
+Mixing those up writes the GUI onto the robot's disk.
 
 Then name it on the bot, in `bots/robot.conf`:
 
@@ -275,10 +275,16 @@ Then name it on the bot, in `bots/robot.conf`:
 LOCAL_REPOS=gui
 ```
 
-`gui` is the directory name under `~/dev`. That is the whole association.
-There is no other place to declare it. Several clones go in one value,
-`LOCAL_REPOS="gui dashboard"`. A name cannot be `robot`, because that path is
-the mount.
+`gui` is the directory name under `~/dev/robot`. Several clones go in one
+value, `LOCAL_REPOS="gui dashboard"`. A name cannot be `mount`, `notes`, or
+`docs`.
+
+`bot up` seeds `~/dev/notes/gui/` the same way it seeds `~/dev/notes/robot/`,
+and writes a line into the generated block of `~/dev/AGENTS.md`. If a leftover
+clone still sits at `~/dev/gui`, `bot up` moves it into the project.
+
+Start the agent from `~/dev/robot`. One session there sees the GUI, the
+mount, and notes.
 
 Bring the bot up again, or for the first time.
 
@@ -290,12 +296,12 @@ That seeds `~/dev/notes/gui/` the same way it seeds `~/dev/notes/robot/`, and
 writes a line into the generated block of `~/dev/AGENTS.md`:
 
 ```
-- `gui` belongs with bot `robot` (at `~/dev/gui`). Notes: `notes/gui/`.
+- `gui` belongs with bot `robot` (at `~/dev/robot/gui`). Notes: `notes/gui/`.
 ```
 
-Start the agent from `~/dev`. One session there sees the GUI, the mount, and
-both notes directories. When the task is the robot, read the GUI too. When the
-task is the GUI, read the robot.
+Start the agent from `~/dev/robot`. One session there sees the GUI, the mount,
+and notes. When the task is the robot, read the GUI too. When the task is the
+GUI, read the robot.
 
 `bot notes gui` works even without a bot config. Use it if you want notes
 before the link is declared.
@@ -308,10 +314,10 @@ Do not assume.
 
 ```bash
 # everything
-time rg --files ~/dev/robot | wc -l
+time rg --files ~/dev/robot/mount | wc -l
 
 # with the exclusions this bot actually uses
-time rg --files ~/dev/robot \
+time rg --files ~/dev/robot/mount \
   -g '!build' -g '!install' -g '!log' -g '!.ros' -g '!bags' \
   -g '!*.bag' -g '!*.mcap' -g '!*.pt' -g '!*.onnx' -g '!.cache' -g '!.git' | wc -l
 ```
@@ -329,13 +335,13 @@ and write down why in the same `decisions.md`.
 **`bot up` says unreachable.** The robot is off, off wifi, or out of range.
 Check the robot. This is the common case, not the exception.
 
-**`ls ~/dev/robot` hangs forever.** The mount is wedged. The connection dropped
+**`ls ~/dev/robot/mount` hangs forever.** The mount is wedged. The connection dropped
 while it was mounted. `bot status robot` reports `stale` without hanging,
 because it reads `/proc/mounts` instead of touching the mount. Once the robot
 is back, `bot down -f robot` then `bot up robot`. Once.
 
 **`bot up` refuses because the mount point is not empty.** Something is already
-in `~/dev/robot/` that is not a mount. Mounting over it would hide it. Look at
+in `~/dev/robot/mount/` that is not a mount. Mounting over it would hide it. Look at
 what is there and move it before retrying.
 
 **`bot run` fails with "command not found" for a ROS tool.** `SOURCE_CMD` in the

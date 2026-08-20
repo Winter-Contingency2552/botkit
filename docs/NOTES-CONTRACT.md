@@ -21,6 +21,24 @@ belongs with a robot, list it in that bot's `LOCAL_REPOS` so the generated
 Hostnames, mount paths, probe output, and search timings live here. They do
 not go in the botkit checkout. That repo is public.
 
+Matt Pocock's skills look for `docs/agents/`, `CONTEXT.md`, `docs/adr/`, and
+`.scratch/` inside a git repo. `bot up` creates `~/dev/<name>/` as that
+project and puts those paths there as symlinks into `notes/<name>/`. Durable
+files still live in the notes git repo. Never create the in-repo copies
+under `mount/`.
+
+| Skill looks for | Lives here |
+|---|---|
+| `docs/agents/` | `notes/<repo>/agents/` |
+| `CONTEXT.md` | `notes/<repo>/CONTEXT.md` |
+| `docs/adr/` | `notes/<repo>/decisions.md` |
+| `.scratch/` | `notes/<repo>/scratch/` |
+
+`bot notes <name>` seeds `agents/` and `scratch/`. Default tracker is local
+markdown under `scratch/`. Switch a repo to GitHub issues by editing
+`agents/issue-tracker.md`. Never create `.scratch/` or `docs/agents/` on a
+mount.
+
 ## Assume this becomes shared
 
 The likely next step is a private repo the team pools notes into, so that
@@ -119,6 +137,9 @@ drifted from it. Both are worth knowing, and neither is fixed by editing
 ## What agents are expected to do
 
 - Read `decisions.md` before working in a repo, then `progress.md`.
+- Read `notes/<repo>/agents/` when it exists, and treat it as that repo's
+  engineering-skill config. Tickets go in `notes/<repo>/scratch/`. `CONTEXT.md`
+  goes in `notes/<repo>/`, next to `decisions.md`.
 - When a robot is similar to one already noted, read that robot's
   `decisions.md` as well. Notes live on the laptop; the other robot does not
   have to be mounted. Write what you reused, and what differs, into this

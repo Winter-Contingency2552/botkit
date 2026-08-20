@@ -455,7 +455,7 @@ main() {
                   # gitignored. do not commit it. do not edit example.conf.
                   bot probe <name>      # then choose REMOTE_MOUNT yourself
                   bot up <name>
-  - Start the agent from ~/dev, not from a repo below it, and not from this
+  - Start the agent from ~/dev/<name>/, never from mount/, and not from this
     checkout.
 
 Keep this checkout where it is: ~/.local/bin/bot and the settings hook both

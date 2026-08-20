@@ -29,6 +29,7 @@ EXCLUDE_GLOBS=(
     # Touched constantly by the agent, and nobody reads either for style.
     '*/notes/*/progress.md'
     '*/notes/*/inbox/*'
+    '*/notes/*/scratch/*'
 
     '*/CHANGELOG.md'
     'CHANGELOG.md'

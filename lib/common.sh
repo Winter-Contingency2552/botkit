@@ -123,7 +123,7 @@ load_bot_conf() {
     [[ -f $conf ]] ||
         die "no config for '$name': expected $conf (copy bots/example.conf to start)"
 
-    BOT_NAME='' BOT_HOST='' BOT_USER='' REMOTE_MOUNT='' MOUNT_POINT=''
+    BOT_NAME='' BOT_HOST='' BOT_USER='' REMOTE_MOUNT='' MOUNT_POINT='' BOT_DIR=''
     REMOTE_WS='' BUILD_CMD='' SOURCE_CMD='' SEARCH_EXCLUDE='' LOCAL_REPOS=''
 
     # shellcheck disable=SC1090  # path is built from a validated bot name
@@ -144,7 +144,11 @@ load_bot_conf() {
     [[ -n $REMOTE_MOUNT || ${BOTKIT_LENIENT_CONF:-0} == 1 ]] ||
         die "$conf: REMOTE_MOUNT is required -- run 'bot probe $name' to see the robot's layout, then set it"
 
-    : "${MOUNT_POINT:=$DEV_DIR/$name}"
+    # Laptop project root. Not a mount. bot up creates it.
+    #   ~/dev/<name>/mount     sshfs
+    #   ~/dev/<name>/<repo>    LOCAL_REPOS clones
+    BOT_DIR="$DEV_DIR/$name"
+    : "${MOUNT_POINT:=$BOT_DIR/mount}"
     : "${SEARCH_EXCLUDE:=$DEFAULT_SEARCH_EXCLUDE}"
     : "${LOCAL_REPOS:=}"
 
@@ -155,10 +159,57 @@ load_bot_conf() {
             die "$conf: LOCAL_REPOS entry '$repo' is not a valid name (letters, digits, dash, underscore)"
         [[ $repo != "$name" ]] ||
             die "$conf: LOCAL_REPOS cannot include the bot's own name '$name'"
+        case "$repo" in
+            mount|notes|docs)
+                die "$conf: LOCAL_REPOS cannot include '$repo' (reserved under ~/dev/$name/)" ;;
+        esac
     done
 
     [[ $MOUNT_POINT == /* ]] || die "$conf: MOUNT_POINT must be an absolute path"
     [[ -z $REMOTE_MOUNT || $REMOTE_MOUNT == /* ]] || die "$conf: REMOTE_MOUNT must be an absolute path"
+}
+
+# Create ~/dev/<name>/ as a laptop project: mount subdir, notes symlink, Matt
+# skill stand-ins, LOCAL_REPOS clones moved in from ~/dev/<repo> if they were
+# left at the old location. Never writes into a live mount.
+ensure_bot_workspace() {
+    local repo dest old
+
+    if is_mounted "$BOT_DIR"; then
+        die "$BOT_DIR is a mount from an older layout. Run 'bot down $BOT_NAME', then 'bot up $BOT_NAME'. The mount will sit at $BOT_DIR/mount."
+    fi
+
+    mkdir -p -- "$BOT_DIR" || die "cannot create project directory $BOT_DIR"
+    mkdir -p -- "$MOUNT_POINT" || die "cannot create mount point $MOUNT_POINT"
+
+    ln -sfn -- "../notes/$BOT_NAME" "$BOT_DIR/notes"
+    mkdir -p -- "$BOT_DIR/docs"
+    ln -sfn -- "../notes/agents" "$BOT_DIR/docs/agents"
+    ln -sfn -- "notes/scratch" "$BOT_DIR/.scratch"
+    ln -sfn -- "notes/CONTEXT.md" "$BOT_DIR/CONTEXT.md"
+
+    if [[ -f $AGENTS_MD ]]; then
+        ln -sfn -- "../AGENTS.md" "$BOT_DIR/AGENTS.md"
+        ln -sfn -- "AGENTS.md" "$BOT_DIR/CLAUDE.md"
+    fi
+
+    # shellcheck disable=SC2086
+    for repo in $LOCAL_REPOS; do
+        dest="$BOT_DIR/$repo"
+        old="$DEV_DIR/$repo"
+        if [[ -e $dest ]]; then
+            continue
+        fi
+        if [[ -e $old ]]; then
+            if is_mounted "$old"; then
+                die "$old is a mount. Not moving it into $dest."
+            fi
+            mv -- "$old" "$dest" || die "could not move $old to $dest"
+            ok "moved $old -> $dest"
+        else
+            warn "clone $repo to $dest"
+        fi
+    done
 }
 
 # ---------------------------------------------------------------- mounts ----
@@ -604,11 +655,11 @@ generated_agents_body() {
     printf '## Generated for this machine\n\n'
     printf 'botkit writes this block. Edit outside the markers. install.sh and `bot up` regenerate everything in between.\n\n'
 
-    printf '### Mounts\n\n'
+    printf '### Projects\n\n'
     while read -r name; do
         if _load_bot_for_generate "$name"; then
             any=1
-            printf -- '- `%s` -> `%s`\n' "$name" "$MOUNT_POINT"
+            printf -- '- `%s` at `%s`. Mount: `%s`.\n' "$name" "$BOT_DIR" "$MOUNT_POINT"
         fi
     done < <(list_bots)
     if (( ! any )); then
@@ -617,14 +668,14 @@ generated_agents_body() {
     printf '\n'
 
     printf '### Associated local repos\n\n'
-    printf 'Laptop clones that belong with a robot. Not mounts. Build and edit these locally. When working on the bot, read these too. When working on one of these, read the bot.\n\n'
+    printf 'Laptop clones that belong with a robot. Not mounts. They live inside that bot'\''s project folder. Build and edit these locally. When working on the bot, read these too. When working on one of these, read the bot.\n\n'
     any=0
     while read -r name; do
         if _load_bot_for_generate "$name"; then
             # shellcheck disable=SC2086
             for repo in $LOCAL_REPOS; do
                 any=1
-                path="$DEV_DIR/$repo"
+                path="$BOT_DIR/$repo"
                 if [[ -d $path ]]; then
                     status="at \`$path\`"
                 else
@@ -635,7 +686,7 @@ generated_agents_body() {
         fi
     done < <(list_bots)
     if (( ! any )); then
-        printf 'None. Set `LOCAL_REPOS=gui` in a bot conf after cloning the GUI to `~/dev/gui`.\n'
+        printf 'None. Set `LOCAL_REPOS=gui` in a bot conf, then clone the GUI to `~/dev/<bot>/gui`.\n'
     fi
     printf '\n'
 

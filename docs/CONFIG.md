@@ -20,12 +20,12 @@ means one of the two is a typo and guessing which is worse than stopping.
 | `BOT_HOST` | **yes** | none | Hostname or IP. `robot.local` works if mDNS does. |
 | `BOT_USER` | **yes** | none | Linux account on the robot. `ssh` and `sshfs` log in as `BOT_USER@BOT_HOST`. Often a shared account such as `team`, not your laptop username. |
 | `REMOTE_MOUNT` | **yes** | none | Absolute path on the robot to mount. See below. |
-| `MOUNT_POINT` | no | `$HOME/dev/<name>` | Where it appears locally. Absolute. Every bot shares one `~/dev`. A second robot is `~/dev/<other-name>`, not a second `~/dev`. |
+| `MOUNT_POINT` | no | `$HOME/dev/<name>/mount` | sshfs path inside that bot's laptop project. Absolute. Not `~/dev/<name>` itself. |
 | `REMOTE_WS` | no | unset | Workspace on the robot. `bot run` and `bot build` `cd` here first. |
 | `BUILD_CMD` | no | unset | What `bot build` runs. Required only for `bot build`. |
 | `SOURCE_CMD` | no | unset | Sourced before every `bot run` command. |
 | `SEARCH_EXCLUDE` | no | see below | Paths under the mount the agent must not search. |
-| `LOCAL_REPOS` | no | empty | Space-separated names of laptop clones under `~/dev` that belong with this robot. The GUI is the usual case. Not mounts. |
+| `LOCAL_REPOS` | no | empty | Space-separated names of laptop clones under `~/dev/<name>/`. The GUI is the usual case. Not mounts. Names `mount`, `notes`, and `docs` are reserved. |
 
 The file is sourced by bash, so `$HOME` and earlier variables expand. That is why
 `SOURCE_CMD` can refer to `$REMOTE_WS`, as long as `REMOTE_WS` is set above it.
@@ -85,14 +85,15 @@ layers are the usual additions.
 
 ### `LOCAL_REPOS`
 
-Optional. Space-separated directory names under `~/dev`. Each name is a laptop
-clone that belongs with this robot. A GUI is the usual case.
+Optional. Space-separated directory names under `~/dev/<BOT_NAME>/`. Each
+name is a laptop clone that belongs with this robot. A GUI is the usual
+case.
 
-You clone the repo yourself. botkit does not create it, does not mount it, and
-does not put it on the robot.
+You clone the repo yourself into the project folder `bot up` created. botkit
+does not create it, does not mount it, and does not put it on the robot.
 
 ```
-git clone <gui-url> ~/dev/gui
+git clone <gui-url> ~/dev/robot/gui
 ```
 
 Then in the bot conf:
@@ -102,10 +103,13 @@ LOCAL_REPOS=gui
 ```
 
 Several names: `LOCAL_REPOS="gui dashboard"`. A name cannot be the bot's own
-name, because that path is the mount.
+name, and cannot be `mount`, `notes`, or `docs`.
+
+If a leftover clone still sits at `~/dev/gui` from an older layout, `bot up`
+moves it into `~/dev/<bot>/gui`.
 
 `bot up` seeds `~/dev/notes/<repo>/` for each entry. The generated block in
-`AGENTS.md` names the link. Start the agent from `~/dev`.
+`AGENTS.md` names the link. Start the agent from `~/dev/<bot>/`.
 
 ## What `install.sh` writes, per adapter
 

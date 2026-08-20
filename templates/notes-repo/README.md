@@ -22,6 +22,9 @@ has an audience, because one day it will.
   architecture.md   what the code does. Re-derivable from source, so disposable.
   decisions.md      why the code is shaped this way. Not recoverable from source.
   progress.md       running log of agent sessions.
+  CONTEXT.md        domain glossary, created by grill-with-docs when needed
+  agents/           Matt Pocock skill config. Stands in for docs/agents/ in the source tree.
+  scratch/          local-markdown tickets. Stands in for .scratch/ in the source tree.
   inbox/            raw drops, append-only, not authoritative
     processed/      sources already distilled into decisions.md
 ```

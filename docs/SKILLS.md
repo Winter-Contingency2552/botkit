@@ -182,25 +182,27 @@ the codebase turn into mud. Matt splits them by who can invoke them.
 **User-invoked** skills run only when you type the name, `/grill-me`.
 **Model-invoked** skills can fire on their own when the task fits.
 
-Run `/setup-matt-pocock-skills` once per working repo. That is `~/dev` or a
-laptop clone like `~/dev/gui`. Never this checkout. Never a mount. The skill
-wants an issue tracker, triage labels, and a place for `CONTEXT.md`. On this
-laptop, durable reasoning still goes in `~/dev/notes/<repo>/decisions.md`. If
-that setup writes `CONTEXT.md`, it lives under `~/dev`, not in botkit and not
-on the robot.
+Run `/setup-matt-pocock-skills` against a laptop clone only if you want the
+in-repo files committed to that clone. For robot work, and for any session
+rooted at `~/dev`, do not. The stand-in is `notes/<repo>/agents/`, seeded by
+`bot notes <repo>`. Default tracker is local markdown under
+`notes/<repo>/scratch/`. Durable decisions stay in `notes/<repo>/decisions.md`.
+`CONTEXT.md` is created later at `notes/<repo>/CONTEXT.md`. Never a mount.
+Never this checkout. Never `~/dev` as if it were one project.
 
 ### Engineering, user-invoked
 
 **`ask-matt`.** Which of these skills fits the current mess. A router. Start
 here if you do not want to memorize the list.
 
-**`setup-matt-pocock-skills`.** Once per working repo, before the rest. Issue
-tracker, triage labels, where domain docs live.
+**`setup-matt-pocock-skills`.** Seeds tracker, labels, and domain-doc pointers.
+On this laptop those files already live in `notes/<repo>/agents/`. Do not run
+it against a mount or against `~/dev`.
 
 **`grill-with-docs`.** Relentless interview about a plan, and it builds a
-shared vocabulary as you go. Writes `CONTEXT.md` and ADRs. Use this before a
-change you would otherwise regret. Pair it with `notes/<repo>/decisions.md`
-for anything that has to survive the next session.
+shared vocabulary as you go. Write `CONTEXT.md` at `notes/<repo>/CONTEXT.md`.
+Durable decisions stay in `notes/<repo>/decisions.md`. Use this before a
+change you would otherwise regret.
 
 **`to-spec`.** Turns the conversation you already had into a spec. No extra
 interview.
@@ -297,7 +299,7 @@ breaks. `diagnosing-bugs` is for something already broken.
 | `robot-bringup` | Boot, systemd, launch composition, udev, watchdog, bringing the stack up in order. | A single node's internals. |
 | `robot-perception` | Cameras, LiDAR, depth, calibration, point clouds, vision pipelines. | Web dashboards. That is `ros2-web-integration`. |
 | `robotics-testing` | Unit, launch_testing, mocks, sim, HIL, CI for robot code. | Red-green-refactor discipline on any repo. That is `tdd`. |
-| `ros2-web-integration` | rosbridge, browser UI, camera streams to a page, REST over ROS 2. | The laptop GUI's own React code. Work that locally in `~/dev/gui`. |
+| `ros2-web-integration` | rosbridge, browser UI, camera streams to a page, REST over ROS 2. | The laptop GUI's own React code. Work that locally in `~/dev/<bot>/gui`. |
 
 ### Writing and reasoning, copied from cursor/plugins
 
@@ -312,9 +314,9 @@ breaks. `diagnosing-bugs` is for something already broken.
 | Skill | Use when | Not for |
 |---|---|---|
 | `ask-matt` | You know you want a Matt skill and not which one. | |
-| `setup-matt-pocock-skills` | First time in a working repo, `~/dev` or `~/dev/gui`. | `~/botkit`. A mount. |
+| `setup-matt-pocock-skills` | Only if you want in-repo files in a laptop clone. Otherwise `bot notes <repo>` already seeded `notes/<repo>/agents/`. | `~/botkit`. A mount. `~/dev` as one project. |
 | `grill-me` | Align on a plan before anyone writes code. No docs required. | |
-| `grill-with-docs` | Same interview, and you want `CONTEXT.md` and ADRs as you go. Write those under `~/dev`. Record durable robot decisions in `notes/<repo>/decisions.md` too. | Writing notes onto a mount. |
+| `grill-with-docs` | Same interview, and you want `CONTEXT.md` as you go. Write it at `notes/<repo>/CONTEXT.md`. Decisions stay in `notes/<repo>/decisions.md`. | Writing either file onto a mount. |
 | `to-spec` | The grilling is done. Turn it into a spec. | Starting from a blank idea. Grill first. |
 | `to-tickets` | A spec or plan needs tracer-bullet tickets with blockers. | |
 | `implement` | A spec or tickets exist and you want them built with `tdd` then `code-review`. | Exploring. Prototype or grill first. |
