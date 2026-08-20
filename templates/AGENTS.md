@@ -48,6 +48,17 @@ same mistake, made on purpose.
 **Builds and launches go through `bot run <name> -- <cmd>` or `bot build
 <name>`.** This laptop cannot build robot code and should not try.
 
+## Associated local repos
+
+Some robots have laptop-only clones listed in `LOCAL_REPOS`. A GUI is the usual
+case. They live at `~/dev/<repo>/`, not on the robot and not inside a mount.
+
+When working on a bot, also read its associated local repos and
+`notes/<repo>/`. When working on a listed repo, also read the bot's notes and
+source. The generated block below names the links.
+
+Never clone into a mount.
+
 ## When the robot stops answering
 
 The robot is battery powered and it will die mid-session. If sshfs hangs, `ls`

@@ -145,3 +145,6 @@ connectivity reasons, stop and report.** That is the whole procedure.
 - **Do not pick `REMOTE_MOUNT` by guessing.** Run `bot probe <name>`, read the
   layout and search-cost numbers it reports for that robot, choose deliberately,
   and record the reason in `notes/<name>/decisions.md`.
+- **A GUI that belongs with a bot lives at `~/dev/<repo>/`.** Same for any other
+  laptop clone. List it in that bot's `LOCAL_REPOS`. The generated block in
+  `AGENTS.md` names the link. Never clone into a mount.

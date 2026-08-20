@@ -20,7 +20,7 @@ You also want key-based ssh to each robot. `bot` runs ssh with `BatchMode=yes`,
 so a password prompt is a failure, not a prompt.
 
 ```bash
-ssh-copy-id user@robot.local
+ssh-copy-id team@robot.local
 ```
 
 ## Install
@@ -88,34 +88,35 @@ skipped.
 ## Your first bot
 
 ```bash
-cp bots/example.conf bots/robot.conf
+cp bots/example.conf bots/mybot.conf
 ```
 
-Edit three fields. Leave `REMOTE_MOUNT` empty for now.
+Edit three fields. Leave `REMOTE_MOUNT` empty for now. If this robot has a GUI
+you clone onto the laptop, that is `LOCAL_REPOS`, covered after `bot up`.
 
 | Field | What to put |
 |---|---|
-| `BOT_NAME` | Same as the filename. `bots/robot.conf` means `BOT_NAME=robot`. This is a local nickname, not a login. |
+| `BOT_NAME` | Same as the filename. `bots/myrobot.conf` means `BOT_NAME=myrobot`. This is a local nickname, not a login. |
 | `BOT_HOST` | Whatever you put after `@` in `ssh`. Hostname, `hostname.local`, or an IP. See below. |
 | `BOT_USER` | The Linux account on the robot, the part before `@` on the robot's prompt. Often a shared account, not the username on this laptop. |
 
 ### Reading the robot's prompt
 
-A typical prompt is `user@hostname`. If the robot shows `user@robot`:
+A typical prompt is `user@hostname`. If the robot shows `myrobot@mybot10`:
 
 | Prompt | Field | Value |
 |---|---|---|
-| `user` (before `@`) | `BOT_USER` | `user` |
-| `robot` (after `@`) | `BOT_HOST` | `robot`, or `robot.local`, or the IP |
-| (you pick) | `BOT_NAME` | usually `robot`, matching `bots/robot.conf` |
+| `myrobot` (before `@`) | `BOT_USER` | `myrobot` |
+| `mybot10` (after `@`) | `BOT_HOST` | `mybot10`, or `mybot10.local`, or the IP |
+| (you pick) | `BOT_NAME` | usually `mybot10`, matching `bots/mybot10.conf` |
 
 On the robot, `whoami` is `BOT_USER` and `hostname` is the machine's name.
 
-**`.local` is not added by botkit.** It is mDNS (Avahi on Ubuntu, Bonjour on Mac). A machine named `robot` can advertise itself as `robot.local` on the LAN so you do not need a DNS server. Use whichever form actually reaches the robot from the laptop:
+**`.local` is not added by botkit.** It is mDNS (Avahi on Ubuntu, Bonjour on Mac). A machine named `mybot10` can advertise itself as `mybot10.local` on the LAN so you do not need a DNS server. Use whichever form actually reaches the robot from the laptop:
 
 ```bash
-ping -c1 robot
-ping -c1 robot.local
+ping -c1 mybot10
+ping -c1 mybot10.local
 ```
 
 Whichever one replies is `BOT_HOST`. If both fail, use the IP. `BOT_HOST` is just the string you put after `ssh user@`.
@@ -123,8 +124,8 @@ Whichever one replies is `BOT_HOST`. If both fail, use the IP. `BOT_HOST` is jus
 You need key-based ssh as that user before `bot probe` will work:
 
 ```bash
-ssh-copy-id user@robot        # or user@robot.local
-ssh user@robot true           # must succeed without a password
+ssh-copy-id myrobot@mybot10        # or myrobot@mybot10.local
+ssh myrobot@mybot10 true           # must succeed without a password
 ```
 
 ### Choosing REMOTE_MOUNT
@@ -133,7 +134,7 @@ There is no default, on purpose. What to mount depends on how that robot is laid
 out, and a bad guess is paid for on every search you ever run against it.
 
 ```bash
-bot probe robot
+bot probe mybot
 ```
 
 That connects over ssh, writes nothing to the robot, and reports:
@@ -147,33 +148,80 @@ That connects over ssh, writes nothing to the robot, and reports:
 
 Then decide:
 
-- **A workspace** (`/home/user/ws`) keeps searches fast and scoped. Right when
+- **A workspace** (`/home/team/ws`) keeps searches fast and scoped. Right when
   the probe shows a large home directory, a lot of recorded data, or work that
   only ever happens in one place.
-- **The home directory** (`/home/user`) is robust when you do not know the
+- **The home directory** (`/home/team`) is robust when you do not know the
   layout yet, when config outside the workspace matters, or when work spans
   several workspaces. It costs search breadth, which `SEARCH_EXCLUDE` contains.
 
 Put the answer in `REMOTE_MOUNT` and the reason in
-`~/dev/notes/robot/decisions.md`. The config file records what you chose; only
+`~/dev/notes/mybot/decisions.md`. The config file records what you chose; only
 the notes record why.
 
 ### Bring it up
 
 ```bash
-bot up robot
+bot up mybot
 ```
 
-Mounts it, seeds `~/dev/notes/robot/`, writes the search exclusions, regenerates
-the marked block in `AGENTS.md`, and prints the mount path. Running it twice is
-a no-op.
+Mounts it, seeds `~/dev/notes/mybot/` and notes for any `LOCAL_REPOS`, writes
+the search exclusions, regenerates the marked block in `AGENTS.md`, and prints
+the mount path. Running it twice is a no-op.
 
 ```bash
-bot run robot -- ros2 topic list
-bot build robot
+bot run mybot -- ros2 topic list
+bot build mybot
 bot status
-bot down robot
+bot down mybot
 ```
+
+## A GUI that belongs with this robot
+
+Robot source stays on the robot, mounted at `~/dev/mybot/`. A GUI is the
+opposite. It runs on the laptop, so it is an ordinary git clone on the laptop.
+The agent still needs to know the two belong together.
+
+Clone it next to the mount, never inside it:
+
+```bash
+git clone <gui-url> ~/dev/gui
+```
+
+`~/dev/gui` is a local repo. `~/dev/mybot` is the mount. Mixing those up writes
+the GUI onto the robot's disk, which is the thing this whole layout exists to
+avoid.
+
+Then name it on the bot, in `bots/mybot.conf`:
+
+```
+LOCAL_REPOS=gui
+```
+
+`gui` is the directory name under `~/dev`. That is the whole association. There
+is no other place to declare it. Several clones go in one value,
+`LOCAL_REPOS="gui dashboard"`. A name cannot be `mybot`, because that path is
+the mount.
+
+Bring the bot up again, or for the first time:
+
+```bash
+bot up mybot
+```
+
+That seeds `~/dev/notes/gui/` the same way it seeds `~/dev/notes/mybot/`, and
+writes a line into the generated block of `~/dev/AGENTS.md`:
+
+```
+- `gui` belongs with bot `mybot` (at `~/dev/gui`). Notes: `notes/gui/`.
+```
+
+Start the agent from `~/dev`. One session rooted there sees the GUI, the mount,
+and both notes directories. When the task is the robot, it should read the GUI
+too. When the task is the GUI, it should read the robot.
+
+`bot notes gui` works even without a bot config, if you want notes before the
+link is declared.
 
 ## Search latency
 
@@ -183,10 +231,10 @@ rather than assuming:
 
 ```bash
 # everything
-time rg --files ~/dev/robot | wc -l
+time rg --files ~/dev/mybot | wc -l
 
 # with the exclusions this bot actually uses
-time rg --files ~/dev/robot \
+time rg --files ~/dev/mybot \
   -g '!build' -g '!install' -g '!log' -g '!.ros' -g '!bags' \
   -g '!*.bag' -g '!*.mcap' -g '!*.pt' -g '!*.onnx' -g '!.cache' -g '!.git' | wc -l
 ```
@@ -206,18 +254,18 @@ and write down why in that robot's `decisions.md`.
 **`bot up` says unreachable.** The robot is off, off wifi, or out of range.
 Check the robot. This is the common case, not the exception.
 
-**`ls ~/dev/robot` hangs forever.** The mount is wedged. The connection dropped
-while it was mounted. `bot status robot` reports `stale` without hanging, because
+**`ls ~/dev/mybot` hangs forever.** The mount is wedged. The connection dropped
+while it was mounted. `bot status mybot` reports `stale` without hanging, because
 it reads `/proc/mounts` instead of touching the mount. Once the robot is back:
-`bot down -f robot` then `bot up robot`. Once.
+`bot down -f mybot` then `bot up mybot`. Once.
 
 **`bot up` refuses because the mount point is not empty.** Something is already
-in `~/dev/robot/` that is not a mount. Mounting over it would hide it. Look at
+in `~/dev/mybot/` that is not a mount. Mounting over it would hide it. Look at
 what is there and move it before retrying.
 
 **`bot run` fails with "command not found" for a ROS tool.** `SOURCE_CMD` in the
 bot config is wrong for that robot. Check the ROS distro and the workspace path:
-`bot run robot -- 'ls /opt/ros'`.
+`bot run mybot -- 'ls /opt/ros'`.
 
 **A password prompt appears.** ssh keys are not set up. `ssh-copy-id
 <user>@<host>`.

@@ -24,6 +24,7 @@ means one of the two is a typo and guessing which is worse than stopping.
 | `BUILD_CMD` | no | unset | What `bot build` runs. Required only for `bot build`. |
 | `SOURCE_CMD` | no | unset | Sourced before every `bot run` command. |
 | `SEARCH_EXCLUDE` | no | see below | Paths under the mount the agent must not search. |
+| `LOCAL_REPOS` | no | empty | Space-separated names of laptop clones under `~/dev` that belong with this robot. The GUI is the usual case. Not mounts. |
 
 The file is sourced by bash, so `$HOME` and earlier variables expand. That is why
 `SOURCE_CMD` can refer to `$REMOTE_WS`, as long as `REMOTE_WS` is set above it.
@@ -75,6 +76,30 @@ Two shapes, treated differently:
 
 Widen it if you mount a home directory. Datasets, virtualenvs, and container
 layers are the usual additions.
+
+### `LOCAL_REPOS`
+
+Optional. Space-separated directory names under `~/dev`. Each name is a laptop
+clone that belongs with this robot. A GUI is the usual case.
+
+You clone the repo yourself. botkit does not create it, does not mount it, and
+does not put it on the robot.
+
+```
+git clone <gui-url> ~/dev/gui
+```
+
+Then in the bot conf:
+
+```
+LOCAL_REPOS=gui
+```
+
+Several names: `LOCAL_REPOS="gui dashboard"`. A name cannot be the bot's own
+name, because that path is the mount.
+
+`bot up` seeds `~/dev/notes/<repo>/` for each entry. The generated block in
+`AGENTS.md` names the link. Start the agent from `~/dev`.
 
 ## What `install.sh` writes, per adapter
 

@@ -102,7 +102,7 @@ load_bot_conf() {
         die "no config for '$name': expected $conf (copy bots/example.conf to start)"
 
     BOT_NAME='' BOT_HOST='' BOT_USER='' REMOTE_MOUNT='' MOUNT_POINT=''
-    REMOTE_WS='' BUILD_CMD='' SOURCE_CMD='' SEARCH_EXCLUDE=''
+    REMOTE_WS='' BUILD_CMD='' SOURCE_CMD='' SEARCH_EXCLUDE='' LOCAL_REPOS=''
 
     # shellcheck disable=SC1090  # path is built from a validated bot name
     source "$conf" || die "failed to read $conf"
@@ -124,6 +124,16 @@ load_bot_conf() {
 
     : "${MOUNT_POINT:=$DEV_DIR/$name}"
     : "${SEARCH_EXCLUDE:=$DEFAULT_SEARCH_EXCLUDE}"
+    : "${LOCAL_REPOS:=}"
+
+    local repo
+    # shellcheck disable=SC2086
+    for repo in $LOCAL_REPOS; do
+        [[ $repo =~ ^[A-Za-z0-9_-]+$ ]] ||
+            die "$conf: LOCAL_REPOS entry '$repo' is not a valid name (letters, digits, dash, underscore)"
+        [[ $repo != "$name" ]] ||
+            die "$conf: LOCAL_REPOS cannot include the bot's own name '$name'"
+    done
 
     [[ $MOUNT_POINT == /* ]] || die "$conf: MOUNT_POINT must be an absolute path"
     [[ -z $REMOTE_MOUNT || $REMOTE_MOUNT == /* ]] || die "$conf: REMOTE_MOUNT must be an absolute path"
@@ -567,7 +577,7 @@ _load_bot_for_generate() {
 }
 
 generated_agents_body() {
-    local name any=0
+    local name any=0 repo path status
 
     printf '## Generated for this machine\n\n'
     printf 'botkit writes this block. Edit outside the markers. install.sh and `bot up` regenerate everything in between.\n\n'
@@ -581,6 +591,29 @@ generated_agents_body() {
     done < <(list_bots)
     if (( ! any )); then
         printf 'No bots configured yet. Copy `bots/example.conf` to `bots/<name>.conf`.\n'
+    fi
+    printf '\n'
+
+    printf '### Associated local repos\n\n'
+    printf 'Laptop clones that belong with a robot. Not mounts. Build and edit these locally. When working on the bot, read these too. When working on one of these, read the bot.\n\n'
+    any=0
+    while read -r name; do
+        if _load_bot_for_generate "$name"; then
+            # shellcheck disable=SC2086
+            for repo in $LOCAL_REPOS; do
+                any=1
+                path="$DEV_DIR/$repo"
+                if [[ -d $path ]]; then
+                    status="at \`$path\`"
+                else
+                    status="listed, not cloned yet (clone it to \`$path\`)"
+                fi
+                printf -- '- `%s` belongs with bot `%s` (%s). Notes: `notes/%s/`.\n' "$repo" "$name" "$status" "$repo"
+            done
+        fi
+    done < <(list_bots)
+    if (( ! any )); then
+        printf 'None. Set `LOCAL_REPOS=gui` in a bot conf after cloning the GUI to `~/dev/gui`.\n'
     fi
     printf '\n'
 

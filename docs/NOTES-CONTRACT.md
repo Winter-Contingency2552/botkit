@@ -14,7 +14,9 @@ from git, not from `ls`, so it is no substitute for keeping notes out of the
 robot's filesystem in the first place.
 
 `bot notes <name>` creates a directory for any repo, robot or not. The GUI needs
-architecture and decisions notes exactly as much as a robot does.
+architecture and decisions notes exactly as much as a robot does. If the GUI
+belongs with a robot, list it in that bot's `LOCAL_REPOS` so the generated
+`AGENTS.md` block names the link.
 
 ## Assume this becomes shared
 

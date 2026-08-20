@@ -100,6 +100,11 @@ cmd_up() {
     fi
 
     seed_notes "$name"
+    local repo
+    # shellcheck disable=SC2086
+    for repo in $LOCAL_REPOS; do
+        seed_notes "$repo"
+    done
 
     select_agents
     apply_generic_agent
