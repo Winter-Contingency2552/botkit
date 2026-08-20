@@ -79,7 +79,7 @@ Then call the grill-me family. Do not reimplement the interview.
 
 The grilling has one job that this skill adds: **name the Goal.** One or
 two lines. What done looks like. Every workstream exists to move that
-Goal. If grilling ends and the Goal is still mush, grill again. Do not
+Goal. If grilling ends and the Goal is still vague, grill again. Do not
 write a plan without it.
 
 ### Write, then stop
