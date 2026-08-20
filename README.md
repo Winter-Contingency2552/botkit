@@ -36,6 +36,46 @@ so an unknown agent still has the rules. Each agent gets as much enforcement as
 it actually supports. The install report says which parts are enforced and
 which are only written down.
 
+## Folder structure
+
+This checkout. Public, holds no robot facts, and stays wherever you clone it:
+
+```
+~/botkit/
+  install.sh        run once. Idempotent: re-running upgrades in place.
+  uninstall.sh
+  bots/              bot configs. Only example.conf is tracked; yours are gitignored.
+  docs/              SETUP.md, CONFIG.md, NOTES-CONTRACT.md, SKILLS.md
+  hooks/             unslop-gate.sh, the pre-commit hook
+  lib/
+    common.sh        shared shell functions
+    agents/          one adapter per supported agent: claude, cursor, codex, generic
+  scripts/
+    bot              the bot command, symlinked to ~/.local/bin/bot
+  skills/            botkit's own skills: wiring, in-class-planning
+  templates/         what install.sh writes: AGENTS.md, notes-repo/, references/
+```
+
+What `install.sh` and `bot up` build on top, private and never pushed here:
+
+```
+~/dev/
+  AGENTS.md          rules for every bot, generated from templates/AGENTS.md
+  CLAUDE.md          symlink to AGENTS.md, for Claude Code
+  notes/             its own git repo. One directory per repo you work on.
+  references/        other people's repos, cloned here to read. Shared, not per-bot.
+  <bot>/             laptop project. Created by `bot up <bot>`. Not a mount.
+    mount/           sshfs. The robot's disk, the only copy of its code.
+    gui/             a laptop clone, if that bot's LOCAL_REPOS=gui
+    notes            symlink to ../notes/<bot>
+    AGENTS.md        symlink to ../AGENTS.md
+    CLAUDE.md        symlink to AGENTS.md
+```
+
+A second robot adds `~/dev/<other>/` with its own `mount/`, not a second
+`~/dev`. Full layout notes, including what each symlink is for, are in
+[docs/SETUP.md](docs/SETUP.md#where-things-live).
+
 ## What gets installed, and why
 
 Skills land in each detected agent's own skills directory. Claude Code also
