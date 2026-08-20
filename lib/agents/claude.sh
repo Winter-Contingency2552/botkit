@@ -29,29 +29,30 @@ _claude_link_instructions() {
 
     step "Linking ~/dev/CLAUDE.md -> AGENTS.md"
 
-    if [[ -L $dst ]]; then
-        if [[ "$(readlink -f -- "$dst")" == "$(readlink -f -- "$AGENTS_MD")" ]]; then
-            skip "~/dev/CLAUDE.md already points at AGENTS.md"
-            return 0
-        fi
-        warn "~/dev/CLAUDE.md is a symlink but not to AGENTS.md — left alone"
-        note_manual "point ~/dev/CLAUDE.md at ~/dev/AGENTS.md, or merge by hand"
-        return 0
-    fi
-
-    if [[ -e $dst ]]; then
-        warn "~/dev/CLAUDE.md exists as a real file — left alone. Claude Code reads CLAUDE.md, not AGENTS.md."
-        note_manual "merge ~/dev/CLAUDE.md into ~/dev/AGENTS.md, then: rm ~/dev/CLAUDE.md && ln -s AGENTS.md ~/dev/CLAUDE.md"
-        return 0
-    fi
-
     [[ -f $AGENTS_MD ]] || {
-        warn "~/dev/AGENTS.md is missing — cannot symlink CLAUDE.md"
+        warn "~/dev/AGENTS.md is missing, cannot symlink CLAUDE.md"
         return 0
     }
 
-    acting "symlink $dst -> AGENTS.md" || return 0
-    ln -s AGENTS.md "$dst"
+    if [[ -L $dst && "$(readlink -f -- "$dst")" == "$(readlink -f -- "$AGENTS_MD")" ]]; then
+        skip "~/dev/CLAUDE.md already points at AGENTS.md"
+        return 0
+    fi
+
+    if [[ -d $dst && ! -L $dst ]]; then
+        warn "~/dev/CLAUDE.md is a directory, cannot symlink it"
+        note_manual "move ~/dev/CLAUDE.md out of the way, then re-run install.sh or bot up"
+        return 0
+    fi
+
+    if [[ -f $dst && ! -L $dst ]]; then
+        acting "back up $dst and replace it with a symlink to AGENTS.md" || return 0
+        backup_once "$dst"
+    else
+        acting "symlink $dst -> AGENTS.md" || return 0
+    fi
+
+    ln -sfn -- AGENTS.md "$dst"
     ok "~/dev/CLAUDE.md -> AGENTS.md"
     note_change "symlinked ~/dev/CLAUDE.md -> AGENTS.md"
 }

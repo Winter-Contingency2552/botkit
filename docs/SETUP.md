@@ -31,9 +31,9 @@ cd ~/botkit
 ./install.sh
 ```
 
-Keep it at `~/botkit`, not under `~/dev`. An agent rooted at `~/dev` would see
-this checkout as just another project and might write hostnames and probe
-output into it.
+Clone it to `~/botkit`, not under `~/dev`. `install.sh` creates `~/dev` next
+to this checkout. Why they are two directories is in
+[Where things live](#where-things-live).
 
 Options:
 
@@ -88,6 +88,55 @@ the new PostToolUse hook with `/hooks` before it will run. Untrusted hooks
 are skipped.
 
 **Unknown agent.** There is nothing to reload. Read `~/dev/AGENTS.md`.
+
+## Where things live
+
+`./install.sh` creates `~/dev`. That is the working root for every robot on
+this laptop. botkit stays at `~/botkit`, next to it, never inside it.
+
+```
+~/botkit/              this repo. Public. Installer, `bot`, docs, example.conf.
+~/dev/                 created by install.sh. Start the agent here.
+  AGENTS.md            rules. The generated block lists every bot.
+  CLAUDE.md            symlink to AGENTS.md. Claude Code reads this name.
+  notes/               its own git repo. One directory per robot or local clone.
+  robot/               sshfs mount. Appears at `bot up robot`.
+  other-robot/         another mount. Same ~/dev, second conf.
+  gui/                 a laptop clone. Not a mount. Listed in LOCAL_REPOS.
+```
+
+**Two directories, not one.** botkit is a public clone. Hostnames, probe
+output, search timings, and notes must not land in it. `~/dev` is the private
+working tree. `notes/` is a second git repo, on purpose. Nesting either repo
+inside the other mixes public installer code with private robot facts, and
+makes uninstall delete the wrong thing.
+
+If botkit lived under `~/dev`, an agent rooted at `~/dev` would see this
+checkout as just another project and write those facts into it. That is the
+failure this split exists to prevent. Keep the clone at `~/botkit`. If you
+move it, `~/.local/bin/bot` and the hook paths break until you re-run
+`./install.sh`.
+
+**One `~/dev`, every bot.** A second robot is `bots/other.conf` plus
+`bot up other`. That adds `~/dev/other` and `~/dev/notes/other`. It does not
+create a second `~/dev`. `MOUNT_POINT` defaults to `$HOME/dev/<name>`. Leave
+that unless you have a reason, and if you do, write the reason in that
+robot's notes.
+
+**What `~/dev` actually does.** It is a directory, not a program. Agents load
+`AGENTS.md` or `CLAUDE.md` from the directory you start them in. Start from
+`~/dev` and one session sees every mount, every local clone, and every notes
+directory, plus the generated rules that name the links. Start from
+`~/botkit` and the session sees the installer, not the robots. Start from
+`~/dev/robot` and the session is rooted on the mount. Notes sit outside the
+project. Anything the agent writes lands on the robot.
+
+```bash
+cd ~/dev
+```
+
+Then start Claude Code, Cursor, or Codex there. `install.sh` and `bot up`
+keep `CLAUDE.md` as a symlink to `AGENTS.md`. You do not run `ln` by hand.
 
 ## Your first bot
 

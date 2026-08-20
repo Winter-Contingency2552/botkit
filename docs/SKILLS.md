@@ -30,7 +30,8 @@ Cursor, and Codex all derive the skill's identity from the folder containing
 | `unslop` | cursor/plugins | automatically, plus a hook nudge |
 | `blast-radius` | cursor/plugins | **by name only** |
 | `bro` | cursor/plugins | **by name only** |
-| mattpocock skills | plugin marketplace | varies |
+| `grill-me`, `grill-with-docs`, `ask-matt`, and the other user-invoked Matt skills | plugin marketplace | **by name only** |
+| `tdd`, `diagnosing-bugs`, `code-review`, and the other model-invoked Matt skills | plugin marketplace | automatically when the task fits |
 
 Skills install to each agent's personal skills location, so they are available
 across every project.
@@ -168,19 +169,178 @@ and `bro`.
 **`bro`.** Restates the last message in plain language, no jargon. Also by name
 only.
 
-## mattpocock skills
+## Matt Pocock's skills
 
 **Source:** [mattpocock/skills](https://github.com/mattpocock/skills), installed
-as a plugin.
+as the Claude Code plugin `mattpocock-skills@mattpocock`. Cursor and Codex do
+not get this plugin. They already have `unslop`, `blast-radius`, and `bro` as
+copied directories.
+
+These are workflow skills, not ROS skills. They exist to stop the usual agent
+failures: building the wrong thing, writing tests after the fact, and letting
+the codebase turn into mud. Matt splits them by who can invoke them.
+**User-invoked** skills run only when you type the name, `/grill-me`.
+**Model-invoked** skills can fire on their own when the task fits.
+
+Run `/setup-matt-pocock-skills` once per working repo. That is `~/dev` or a
+laptop clone like `~/dev/gui`. Never this checkout. Never a mount. The skill
+wants an issue tracker, triage labels, and a place for `CONTEXT.md`. On this
+laptop, durable reasoning still goes in `~/dev/notes/<repo>/decisions.md`. If
+that setup writes `CONTEXT.md`, it lives under `~/dev`, not in botkit and not
+on the robot.
+
+### Engineering, user-invoked
+
+**`ask-matt`.** Which of these skills fits the current mess. A router. Start
+here if you do not want to memorize the list.
+
+**`setup-matt-pocock-skills`.** Once per working repo, before the rest. Issue
+tracker, triage labels, where domain docs live.
+
+**`grill-with-docs`.** Relentless interview about a plan, and it builds a
+shared vocabulary as you go. Writes `CONTEXT.md` and ADRs. Use this before a
+change you would otherwise regret. Pair it with `notes/<repo>/decisions.md`
+for anything that has to survive the next session.
+
+**`to-spec`.** Turns the conversation you already had into a spec. No extra
+interview.
+
+**`to-tickets`.** Breaks a spec or plan into tracer-bullet tickets with
+blocking edges.
+
+**`implement`.** Builds from a spec or tickets. Drives `tdd` at the seams,
+then `code-review` before commit.
+
+**`wayfinder`.** Plans work that will not fit in one session, as a map of
+decision tickets, then walks them one at a time.
+
+**`triage`.** Moves issues through a labeled state machine and writes
+agent-ready briefs.
+
+**`improve-codebase-architecture`.** Scans for deepening opportunities, shows
+them as an HTML report, then grills whichever one you pick. A survey, not a
+rescue. It will not untangle a ball of mud for you.
+
+### Engineering, model-invoked
+
+**`tdd`.** Red-green-refactor. One vertical slice at a time. The agent writes
+the failing test first.
+
+**`diagnosing-bugs`.** Reproduce, minimize, hypothesize, instrument, fix,
+regression-test. For something actually broken or slow, not for "what talks
+to what".
+
+**`code-review`.** Two axes in parallel: does the diff follow this repo's
+standards, and does it match the spec.
+
+**`codebase-design`.** Vocabulary for deep modules: a lot of behavior behind
+a small interface, at a clean seam, testable through that interface.
+
+**`domain-modeling`.** Sharpens the project's terms against a glossary and
+updates `CONTEXT.md` and ADRs.
+
+**`prototype`.** Throwaway HTML to answer a design question. Not production
+code.
+
+**`research`.** Primary sources, cited markdown, often as a background agent.
+
+**`resolving-merge-conflicts`.** Hunk by hunk, by intent, then finish the
+merge. Never `--abort`.
+
+**`wizard`.** An interactive bash wizard for steps only a human can do:
+credentials, a third-party dashboard, a one-off cutover. Not for steps the
+agent can run itself.
+
+### Productivity
+
+**`grill-me`.** Same interview as `grill-with-docs`, without writing docs.
+Non-code plans, or a pass before you care about `CONTEXT.md`.
+
+**`grilling`.** The interview primitive the other grill skills call. You
+rarely invoke this one by name.
+
+**`handoff`.** Compacts the session so another agent can continue.
+
+**`teach`.** A multi-session lesson in the current directory. A learning
+path, not a system map. That is `wiring`.
+
+**`wait-what`.** The last message did not land. Re-pitch it in plain
+language, using `CONTEXT.md` terms if they exist.
+
+**`to-questionnaire`.** A decision you cannot answer alone, turned into a
+markdown questionnaire for the person who can.
+
+**`writing-for-agents`.** Writing skills, `AGENTS.md`, `CLAUDE.md`, or any
+doc an agent will follow.
+
+The plugin also ships `misc/` and `in-progress/` skills: course scaffolds,
+Husky, shoehorn migrations, writing-beat experiments. They install because
+the plugin is a bundle. They are not the robotics path.
 
 The marketplace manifest names itself `mattpocock`, so the plugin id is
 `mattpocock-skills@mattpocock`, **not** `@skills`. `install.sh` probes for
 `claude plugin marketplace`, uses it when present, and otherwise prints the
-`/plugin` lines to paste. Skip the step entirely with `--no-plugins`. This step
-is Claude Code only. Cursor and Codex already have the same three pstack skills
-as copied directories.
+`/plugin` lines to paste. Skip the step entirely with `--no-plugins`.
 
----
+## When to use each skill
+
+One row per skill botkit installs. If two rows could apply, pick the more
+specific one. `wiring` maps connections. `blast-radius` asks what a change
+breaks. `diagnosing-bugs` is for something already broken.
+
+### This repo and the robotics set
+
+| Skill | Use when | Not for |
+|---|---|---|
+| `wiring` | What talks to what in a ROS 2 system, live or from source. Why a topic never arrives. QoS on both ends. | What a planned diff might break elsewhere. That is `blast-radius`. A learning path. That is `teach`. |
+| `ros2` | Writing or debugging nodes, packages, launch files, QoS, lifecycle, colcon. | Mapping an already-running graph. That is `wiring`. |
+| `robot-bringup` | Boot, systemd, launch composition, udev, watchdog, bringing the stack up in order. | A single node's internals. |
+| `robot-perception` | Cameras, LiDAR, depth, calibration, point clouds, vision pipelines. | Web dashboards. That is `ros2-web-integration`. |
+| `robotics-testing` | Unit, launch_testing, mocks, sim, HIL, CI for robot code. | Red-green-refactor discipline on any repo. That is `tdd`. |
+| `ros2-web-integration` | rosbridge, browser UI, camera streams to a page, REST over ROS 2. | The laptop GUI's own React code. Work that locally in `~/dev/gui`. |
+
+### Writing and reasoning, copied from cursor/plugins
+
+| Skill | Use when | Not for |
+|---|---|---|
+| `unslop` | Any user-facing prose you just wrote. The hook nudges. Run it by name if you need it to actually happen. | `progress.md`, `inbox/`, anything under a mount. |
+| `blast-radius` | What this change breaks somewhere else, proved by running code. Ask for it by name. | A live wiring map. A code-quality review against a spec. That is `code-review`. |
+| `bro` | The last message was jargon. Ask for it by name. | A full re-pitch with missing context. That is `wait-what`. |
+
+### Matt Pocock, user-invoked
+
+| Skill | Use when | Not for |
+|---|---|---|
+| `ask-matt` | You know you want a Matt skill and not which one. | |
+| `setup-matt-pocock-skills` | First time in a working repo, `~/dev` or `~/dev/gui`. | `~/botkit`. A mount. |
+| `grill-me` | Align on a plan before anyone writes code. No docs required. | |
+| `grill-with-docs` | Same interview, and you want `CONTEXT.md` and ADRs as you go. Write those under `~/dev`. Record durable robot decisions in `notes/<repo>/decisions.md` too. | Writing notes onto a mount. |
+| `to-spec` | The grilling is done. Turn it into a spec. | Starting from a blank idea. Grill first. |
+| `to-tickets` | A spec or plan needs tracer-bullet tickets with blockers. | |
+| `implement` | A spec or tickets exist and you want them built with `tdd` then `code-review`. | Exploring. Prototype or grill first. |
+| `wayfinder` | The work will not fit in one session. | A single-session change. |
+| `triage` | Incoming issues and PRs need a labelled state machine and an agent-ready brief. | |
+| `improve-codebase-architecture` | Periodic scan for modules that should be deeper. | Untangling a years-old mess in one pass. |
+| `handoff` | This session has to stop and another agent continues. | The standing session log. That is `notes/<repo>/progress.md`. |
+| `teach` | You want to learn a concept over several sessions. | A map of the running robot. That is `wiring`. |
+| `wait-what` | The last message did not land. | Light jargon cleanup. That is `bro`. |
+| `to-questionnaire` | You cannot answer this alone. Someone else has to. | |
+
+### Matt Pocock, model-invoked
+
+| Skill | Use when | Not for |
+|---|---|---|
+| `tdd` | Building or fixing test-first, red-green-refactor. | Robotics-specific test tools and fixtures. That is `robotics-testing`. |
+| `diagnosing-bugs` | Something is broken, throwing, or slow, and you need a reproduce-minimise-instrument loop. | "Why isn't this topic arriving" when the robot is up. Try `wiring` first. |
+| `code-review` | Review the diff since a commit, branch, or merge-base against standards and the spec. | Blast radius of a small change. |
+| `codebase-design` | Designing a module's interface, seam, or test surface. | |
+| `domain-modeling` | Sharpening terms, editing `CONTEXT.md` or an ADR. | |
+| `prototype` | A throwaway to answer a design question. | Shipping code. |
+| `research` | Primary sources, cited notes, delegated reading. | Live robot introspection. That is `wiring`. |
+| `resolving-merge-conflicts` | A merge or rebase is already in progress and conflicted. | |
+| `wizard` | Steps only a human can perform, as an interactive bash script. | Anything the agent can run itself. |
+| `grilling` | Called by the other grill skills. | Invoking this by name. Use `grill-me` or `grill-with-docs`. |
+| `writing-for-agents` | Editing a skill, `AGENTS.md`, or `CLAUDE.md`. | User-facing docs. That is `unslop`. |
 
 ## The unslop hook
 

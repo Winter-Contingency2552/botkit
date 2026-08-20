@@ -20,7 +20,7 @@ means one of the two is a typo and guessing which is worse than stopping.
 | `BOT_HOST` | **yes** | none | Hostname or IP. `robot.local` works if mDNS does. |
 | `BOT_USER` | **yes** | none | Linux account on the robot. `ssh` and `sshfs` log in as `BOT_USER@BOT_HOST`. Often a shared account such as `team`, not your laptop username. |
 | `REMOTE_MOUNT` | **yes** | none | Absolute path on the robot to mount. See below. |
-| `MOUNT_POINT` | no | `$HOME/dev/<name>` | Where it appears locally. Absolute. |
+| `MOUNT_POINT` | no | `$HOME/dev/<name>` | Where it appears locally. Absolute. Every bot shares one `~/dev`. A second robot is `~/dev/<other-name>`, not a second `~/dev`. |
 | `REMOTE_WS` | no | unset | Workspace on the robot. `bot run` and `bot build` `cd` here first. |
 | `BUILD_CMD` | no | unset | What `bot build` runs. Required only for `bot build`. |
 | `SOURCE_CMD` | no | unset | Sourced before every `bot run` command. |
@@ -141,8 +141,9 @@ Replace only what is between the markers. If they are absent, they are appended.
 ### Claude Code (`lib/agents/claude.sh`)
 
 **Context.** `~/dev/CLAUDE.md` as a symlink to `AGENTS.md`, because Claude Code
-does not read `AGENTS.md`. If `CLAUDE.md` already exists as a real file, it is
-left alone and you are told to merge by hand.
+does not read `AGENTS.md`. `install.sh` and `bot up` both create that link.
+A regular file already at that path is copied to `CLAUDE.md.botkit-bak` once,
+then replaced. You do not run `ln` by hand.
 
 **Skills.** Copied to `~/.claude/skills/<name>/`. Provenance:
 `~/.claude/skills/.botkit-provenance`.

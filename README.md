@@ -21,6 +21,18 @@ agent, credential, skills, notes  ->  ssh  ->  builds, launches, ros2 introspect
 
 Adding a second or third robot is one config file.
 
+## Two directories
+
+`~/botkit` is this repo, and it is public. `~/dev` is the working root
+`install.sh` creates. Every robot mounts at `~/dev/<name>`. A second bot is a
+second subdirectory, not a second `~/dev`.
+
+Start the agent from `~/dev`, never from this checkout and never from a
+mount. Agents load `AGENTS.md` or `CLAUDE.md` from the directory you start
+them in. One session there sees every mount, every local clone, and
+`notes/`. Why they stay apart is in
+[docs/SETUP.md](docs/SETUP.md#where-things-live).
+
 The installer works with Claude Code, Cursor, and Codex, and writes `AGENTS.md`
 so an unknown agent still has the rules. Each agent gets as much enforcement as
 it actually supports. The install report says which parts are enforced and
@@ -49,9 +61,14 @@ checks, and tests. `docs/SKILLS.md` reads the upstream eval honestly, including
 where it oversells itself.
 
 **Writing and reasoning skills.** `unslop`, `blast-radius`, and `bro` from
-[cursor/plugins](https://github.com/cursor/plugins), plus Matt Pocock's skills
-through the Claude Code plugin marketplace. A hook applies `unslop` to prose
-without being asked, on agents that can inject hook context.
+[cursor/plugins](https://github.com/cursor/plugins). A hook applies `unslop` to
+prose without being asked, on agents that can inject hook context.
+
+**Matt Pocock's skills.** Claude Code plugin only. Grilling, specs, TDD, review,
+and the rest of a real engineering workflow. Not ROS. Run
+`/setup-matt-pocock-skills` once from `~/dev` or a laptop clone, never from this
+checkout and never from a mount. What each skill is for is in
+[docs/SKILLS.md](docs/SKILLS.md).
 
 ## The notes contract
 
@@ -88,6 +105,27 @@ bot up robot
 ```
 
 Restart the agent after the first install, or the new skills stay invisible.
+
+## TODO
+
+Hardware and harness checks that are still outstanding. Record results in
+`~/dev/notes/botkit/`, not in this repo.
+
+**On a real robot**
+
+- [ ] `bot run <name> -- ros2 topic list` and `bot build <name>`
+- [ ] `bot down` unmounts. A second `bot down` is a clean no-op.
+- [ ] `bot status` reports `stale` when the mount is up and wifi drops, `unreachable` when the robot is off and nothing is mounted. Both return in seconds.
+- [ ] After `stale`: `bot down -f` then `bot up` recovers.
+- [ ] Power-down drill: with a session on a mounted bot, power the robot off. The agent stops within two failed commands and does not start reading source to explain it.
+- [ ] `wiring` live, `wiring` static with the robot down, and `wiring` static against a laptop clone such as the GUI.
+- [ ] Search exclusions actually block on Claude Code. On Cursor and Codex, note what happens, because those are written down.
+- [ ] `ssh` to the robot afterwards. No agent config, no notes, no botkit files.
+- [ ] Repeat the list on Cursor, then on Codex.
+
+**Offline**
+
+- [ ] `HOME=<temp> ./install.sh` with no agent installed, then with each adapter. A second install is a no-op. `./uninstall.sh` leaves `~/dev/notes/` alone. Adding a directory under `skills/` installs it with no edit to `install.sh`.
 
 ---
 
