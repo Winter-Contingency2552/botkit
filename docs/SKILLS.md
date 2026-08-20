@@ -22,6 +22,7 @@ Cursor, and Codex all derive the skill's identity from the folder containing
 | Skill | Source | Fires |
 |---|---|---|
 | `wiring` | this repo | automatically, or by name |
+| `in-class-planning` | this repo | **by name only** |
 | `ros2` | robotics-agent-skills | automatically |
 | `robot-bringup` | robotics-agent-skills | automatically |
 | `robot-perception` | robotics-agent-skills | automatically |
@@ -78,6 +79,31 @@ system contradicts a recorded decision.
 
 Distinct from `teach`, which builds a learning path for a subject, and from
 `blast-radius`, which asks what a change breaks.
+
+---
+
+## `in-class-planning`
+
+**Written for this repo. By name only. Expensive.** Marked
+`disable-model-invocation`, so it does not steal `grill-me` or
+`implement`. Warn the user about the token cost before grilling and
+before the swarm.
+
+**Plan** reads notes, then calls the Skill tool with `grilling` (and
+`domain-modeling` when they want `CONTEXT.md`). The grilling has to name
+the **Goal**. The file is `notes/<repo>/plans/<slug>.md`. Workstreams in
+that file are independent slices with disjoint file ownership, because
+two writers on the same sshfs path will corrupt it. Status `aligned`
+means they agreed. The agent does not edit source during this phase.
+
+**Execute** runs `bot status`, checks every assumption, then fills every
+parallel subagent slot this agent will run and loops until the Goal is
+done. Workers use `tdd`. The orchestrator calls `code-review` on the
+combined diff. A failed check or a failed worker blocks the change.
+
+A cheap one-file tweak is `implement`. A decision map that will not fit
+in one session is `wayfinder`. A robot that dies mid-edit is the stop
+rule in `AGENTS.md`.
 
 ---
 
@@ -295,6 +321,7 @@ breaks. `diagnosing-bugs` is for something already broken.
 | Skill | Use when | Not for |
 |---|---|---|
 | `wiring` | What talks to what in a ROS 2 system, live or from source. Why a topic never arrives. QoS on both ends. | What a planned diff might break elsewhere. That is `blast-radius`. A learning path. That is `teach`. |
+| `in-class-planning` | Ask for it by name. Expensive. Grill a Goal from notes while the robot is off, then execute with a parallel worker swarm. | A cheap one-file tweak. That is `implement`. A multi-session decision map. That is `wayfinder`. A robot that died mid-edit. That is the stop rule in `AGENTS.md`. |
 | `ros2` | Writing or debugging nodes, packages, launch files, QoS, lifecycle, colcon. | Mapping an already-running graph. That is `wiring`. |
 | `robot-bringup` | Boot, systemd, launch composition, udev, watchdog, bringing the stack up in order. | A single node's internals. |
 | `robot-perception` | Cameras, LiDAR, depth, calibration, point clouds, vision pipelines. | Web dashboards. That is `ros2-web-integration`. |
@@ -315,11 +342,11 @@ breaks. `diagnosing-bugs` is for something already broken.
 |---|---|---|
 | `ask-matt` | You know you want a Matt skill and not which one. | |
 | `setup-matt-pocock-skills` | Only if you want in-repo files in a laptop clone. Otherwise `bot notes <repo>` already seeded `notes/<repo>/agents/`. | `~/botkit`. A mount. `~/dev` as one project. |
-| `grill-me` | Align on a plan before anyone writes code. No docs required. | |
-| `grill-with-docs` | Same interview, and you want `CONTEXT.md` as you go. Write it at `notes/<repo>/CONTEXT.md`. Decisions stay in `notes/<repo>/decisions.md`. | Writing either file onto a mount. |
+| `grill-me` | Align on a plan before anyone writes code. No docs required. Also called by `in-class-planning`. | The expensive robot-offline-then-swarm loop by itself. Ask for `in-class-planning`. |
+| `grill-with-docs` | Same interview, and you want `CONTEXT.md` as you go. Write it at `notes/<repo>/CONTEXT.md`. Decisions stay in `notes/<repo>/decisions.md`. Also called by `in-class-planning`. | Writing either file onto a mount. |
 | `to-spec` | The grilling is done. Turn it into a spec. | Starting from a blank idea. Grill first. |
 | `to-tickets` | A spec or plan needs tracer-bullet tickets with blockers. | |
-| `implement` | A spec or tickets exist and you want them built with `tdd` then `code-review`. | Exploring. Prototype or grill first. |
+| `implement` | A spec or tickets exist and you want them built with `tdd` then `code-review`. | Exploring. Prototype or grill first. The robot-offline Goal then swarm. That is `in-class-planning`. |
 | `wayfinder` | The work will not fit in one session. | A single-session change. |
 | `triage` | Incoming issues and PRs need a labelled state machine and an agent-ready brief. | |
 | `improve-codebase-architecture` | Periodic scan for modules that should be deeper. | Untangling a years-old mess in one pass. |
@@ -397,8 +424,9 @@ in the inbox's own README.
   `name`, `description`, and `disable-model-invocation` appear. Anything else
   risks being ignored or rejected by one agent.
 - **`disable-model-invocation: true` is documented for both Claude Code and
-  Cursor.** `blast-radius` and `bro` use it to stay by-name-only. Codex does
-  not document that key; see the blast-radius note above.
+  Cursor.** `blast-radius`, `bro`, and `in-class-planning` use it to stay
+  by-name-only. Codex does not document that key; see the blast-radius note
+  above.
 - **Never name an agent in the skill body.** Write `bot run <name> -- ros2 node
   list`, not "use the Bash tool to run". `wiring` is the model to copy: it
   tells the agent what to run and what to conclude, and never how its own

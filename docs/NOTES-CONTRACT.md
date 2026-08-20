@@ -134,12 +134,33 @@ raising. Either the decision was reversed without being recorded, or the code
 drifted from it. Both are worth knowing, and neither is fixed by editing
 `architecture.md`.
 
+## Plans
+
+`notes/<repo>/plans/`. One file per piece of work. Written while the robot
+may be off. `in-class-planning` execute reads this, checks every
+assumption against the live system, then runs a parallel worker swarm
+until the Goal is done.
+
+The Goal is the point of the planning stage. One or two lines. What done
+looks like. Workstreams are independent slices with disjoint file
+ownership. After the change lands, durable reasoning goes into
+`decisions.md`. The plan file stays. Mark it `done`. Do not delete it.
+
+Never write a plan under a mount.
+
 ## What agents are expected to do
 
 - Read `decisions.md` before working in a repo, then `progress.md`.
 - Read `notes/<repo>/agents/` when it exists, and treat it as that repo's
   engineering-skill config. Tickets go in `notes/<repo>/scratch/`. `CONTEXT.md`
   goes in `notes/<repo>/`, next to `decisions.md`.
+- When asked for `in-class-planning`, or when the robot is down and the
+  work has not started, write `notes/<repo>/plans/<slug>.md` with a named
+  Goal. Call `grilling` to refine it. Warn that the skill is expensive.
+  Do not wait for the mount.
+- When asked to execute, verify every assumption against the live robot,
+  then fill every parallel worker slot until the Goal is done. A failed
+  check blocks the change.
 - When a robot is similar to one already noted, read that robot's
   `decisions.md` as well. Notes live on the laptop; the other robot does not
   have to be mounted. Write what you reused, and what differs, into this

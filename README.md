@@ -51,6 +51,14 @@ own column because a best-effort publisher against a reliable subscriber never
 connects, nothing reports an error, and the topic just never arrives. That bug
 costs hours every time.
 
+**`in-class-planning`.** Also written for this repo. By name only. Expensive:
+a full grill, then as many parallel workers as the agent will run, looping
+until the Goal is done. It calls the `grill-me` family to name the Goal
+from notes while the robot may be off, writes `notes/<repo>/plans/`, and
+stops. On execute it verifies every assumption against the live system,
+then swarms. A failed check blocks the change. A cheap one-file tweak is
+`implement`. A robot that dies mid-edit is still stop-and-report.
+
 **Robotics skills.** `ros2`, `robot-bringup`, `robot-perception`,
 `robotics-testing`, and `ros2-web-integration`, from a pinned and audited commit
 of [robotics-agent-skills](https://github.com/arpitg1304/robotics-agent-skills).
@@ -69,13 +77,16 @@ skill is for is in [docs/SKILLS.md](docs/SKILLS.md).
 
 ## The notes contract
 
-Every repo gets a directory under `~/dev/notes/` holding four things.
-`architecture.md` says what the code does. Source can regenerate it, so it is
-disposable. `decisions.md` says why the code is shaped this way, which nothing
-recovers from source, so it is the file that earns its keep. `progress.md` logs
-sessions. `inbox/` takes raw drops, append-only, distilled into decisions on a
-periodic pass. When architecture and decisions conflict, decisions wins and
-architecture gets regenerated. Full version:
+Every repo gets a directory under `~/dev/notes/` holding four standing files
+plus `plans/`. `architecture.md` says what the code does. Source can regenerate
+it, so it is disposable. `decisions.md` says why the code is shaped this way,
+which nothing recovers from source, so it is the file that earns its keep.
+`progress.md` logs sessions. `inbox/` takes raw drops, append-only, distilled
+into decisions on a periodic pass. `plans/` holds change plans written while
+the robot may be off. `in-class-planning` verifies each assumption against
+the live system before a swarm of workers edits source. When architecture
+and decisions conflict, decisions wins and architecture gets regenerated.
+Full version:
 [docs/NOTES-CONTRACT.md](docs/NOTES-CONTRACT.md).
 
 `~/dev/notes` is its own git repo with no remote, because the likely next step is
@@ -159,6 +170,12 @@ Establish that the robot is up first. Every error until then is noise.
 **Budget rule: if two consecutive commands against the robot fail for
 connectivity reasons, stop and report.** That is the whole procedure.
 
+A planning session that never needed the robot is different. Notes are on
+this laptop. `in-class-planning` writes `notes/<repo>/plans/<slug>.md`,
+grills until the Goal is named, then stops. Do not convert a hung mount
+into a planning session. When the user says execute, verify every
+assumption against the live robot, then swarm until the Goal is done.
+
 ## The other rules
 
 - **Never write anything to a mount point** except source the task requires.
@@ -173,6 +190,11 @@ connectivity reasons, stop and report.** That is the whole procedure.
 - **Builds and launches go through `bot run <name> -- <cmd>` or `bot build
   <name>`.** The laptop cannot build this code and should not try.
 - **Read `notes/<repo>/` before working in a repo.** `decisions.md` first.
+- **Plan from notes when the robot is off.** `in-class-planning` writes
+  `notes/<repo>/plans/`. Execute verifies every assumption on the live
+  robot, then runs as many parallel workers as the agent will allow until
+  the Goal is done. A failed check blocks the change. Warn that it is
+  expensive before starting.
 - **Other robots' notes are fair game.** They live at `~/dev/notes/<name>/` on
   this laptop. The other robot does not have to be mounted. If the task is
   similar to one already noted, read that `decisions.md` and record what you

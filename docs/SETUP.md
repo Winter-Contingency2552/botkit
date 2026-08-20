@@ -142,6 +142,29 @@ Matt Pocock's skills look for files in the project root. `bot up` puts
 `docs/agents/`, `.scratch/`, and `CONTEXT.md` in `~/dev/<bot>/` as symlinks
 into `~/dev/notes/<bot>/`. Do not create those under `mount/`.
 
+## Planning without the robot
+
+`bot up` creates `~/dev/robot/` even when the robot is unreachable. Start
+the agent there anyway. Notes, the GUI clone, and `AGENTS.md` are enough
+to think.
+
+The `in-class-planning` skill writes `notes/<repo>/plans/<slug>.md`. It
+calls `grill-me` to refine the idea until the Goal is named. Each
+assumption in that file has to be checkable once the robot is up. Then
+stop. The agent does not edit robot source during planning.
+
+When the robot is on wifi, say execute. The agent warns that the swarm is
+expensive, runs `bot status`, checks every assumption against the live
+system, and only then spins up as many parallel workers as it can,
+looping until the Goal is done. A failed check blocks the change. Source
+stays untouched until every check holds.
+
+GUI-only work can execute without the robot if every assumption is about a
+clone on this laptop.
+
+A robot that dies mid-edit is the other case. That is stop-and-report, not
+a planning session. The stop rule in `AGENTS.md` still applies.
+
 ## Your first bot
 
 ```bash
@@ -333,7 +356,9 @@ and write down why in the same `decisions.md`.
 ## Troubleshooting
 
 **`bot up` says unreachable.** The robot is off, off wifi, or out of range.
-Check the robot. This is the common case, not the exception.
+Check the robot. This is the common case, not the exception. The project
+folder is still there. Start the agent from `~/dev/robot` and plan against
+notes. Bring the robot up later and execute.
 
 **`ls ~/dev/robot/mount` hangs forever.** The mount is wedged. The connection dropped
 while it was mounted. `bot status robot` reports `stale` without hanging,

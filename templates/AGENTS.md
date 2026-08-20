@@ -72,6 +72,32 @@ source. The generated block below names the links.
 
 Never clone into `mount/`.
 
+## Planning without the robot
+
+The project folder exists without a mount. Notes, the GUI clone, and this
+file are enough to think. If I asked to plan, or the robot is off and the
+work has not started yet, write a plan under `notes/plans/`. Do not wait
+for ssh. Do not probe the mount. Unreachable is the expected state, not a
+failure.
+
+A plan lists checkable assumptions. Walk them with me until we agree.
+Status `aligned` means we agreed. Then stop. Do not edit source until I
+say execute. The `in-class-planning` skill is the procedure. It is
+expensive. Warn me about the token cost before grilling and before the
+swarm.
+
+Once the robot is up, `execute` the plan: `bot status` first, check every
+assumption against the live system, then run as many parallel workers as
+this agent will allow until the Goal is done. If an assumption is false,
+stop and revise the plan. Do not start the swarm on a failed check.
+
+GUI-only work can execute without the robot if every assumption is about a
+clone on this laptop.
+
+If you were already in the middle of live work and the robot dies, that is
+the next section, not this one. Stop. Do not convert a hung mount into a
+planning session.
+
 ## Engineering skills
 
 Matt Pocock's skills look for `docs/agents/`, `CONTEXT.md`, `docs/adr/`, and
@@ -105,6 +131,9 @@ that the robot is up first; every error before that is noise.
 
 **Budget rule: two consecutive failures against the robot for connectivity
 reasons means stop and report.** That is the entire procedure.
+
+A planning session that never needed the robot is the previous section, not
+this one. Do not switch into planning unless I asked to plan.
 
 ## Choosing what to mount
 
