@@ -5,7 +5,7 @@ number of robots.
 
 ## What this is
 
-I develop ROS 2 code that runs on robots. The agent, my credential, and every
+This is for developing ROS 2 code that runs on robots. The agent, your credential, and every
 piece of AI config live on my laptop. The robot's filesystem is mounted over
 sshfs, so there is exactly one copy of the code and it is the robot's copy.
 Builds and launches run on the robot over ssh.
