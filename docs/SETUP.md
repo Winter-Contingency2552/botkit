@@ -303,6 +303,21 @@ LOCAL_REPOS=gui
 value, `LOCAL_REPOS="gui dashboard"`. A name cannot be `mount`, `notes`, or
 `docs`.
 
+Cloning it yourself first is optional. Add the URL to `LOCAL_REPO_URLS` and
+`bot up` clones it for you the first time, as long as nothing is already
+sitting at `~/dev/robot/gui`:
+
+```
+LOCAL_REPO_URLS=gui=<gui-url>
+```
+
+This is the field that makes handing a bot conf to a teammate worth doing.
+`BOT_HOST`, `REMOTE_MOUNT`, `LOCAL_REPOS`, and `LOCAL_REPO_URLS` together
+describe a shared robot and its GUI well enough that their first `bot up`
+reconstructs both. Only `BOT_USER` might need to change per teammate, if
+you aren't sharing one account. Full field reference in
+[CONFIG.md](CONFIG.md#local_repo_urls).
+
 `bot up` seeds `~/dev/notes/gui/` the same way it seeds `~/dev/notes/robot/`,
 and writes a line into the generated block of `~/dev/AGENTS.md`. If a leftover
 clone still sits at `~/dev/gui`, `bot up` moves it into the project.

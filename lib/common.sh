@@ -125,7 +125,7 @@ load_bot_conf() {
         die "no config for '$name': expected $conf (copy bots/example.conf to start)"
 
     BOT_NAME='' BOT_HOST='' BOT_USER='' REMOTE_MOUNT='' MOUNT_POINT='' BOT_DIR=''
-    REMOTE_WS='' BUILD_CMD='' SOURCE_CMD='' SEARCH_EXCLUDE='' LOCAL_REPOS=''
+    REMOTE_WS='' BUILD_CMD='' SOURCE_CMD='' SEARCH_EXCLUDE='' LOCAL_REPOS='' LOCAL_REPO_URLS=''
 
     # shellcheck disable=SC1090  # path is built from a validated bot name
     source "$conf" || die "failed to read $conf"
@@ -164,6 +164,29 @@ load_bot_conf() {
             mount|notes|docs)
                 die "$conf: LOCAL_REPOS cannot include '$repo' (reserved under ~/dev/$name/)" ;;
         esac
+    done
+
+    # Optional clone URL per LOCAL_REPOS entry, so a shared conf is enough for
+    # a teammate's `bot up` to clone the GUI itself instead of them having to
+    # be told the URL out of band. "name=url" pairs, space-separated. Only
+    # split on the first '=' so a URL with its own '=' (a query string) still
+    # parses. Declared -g so it survives this function returning; -A because
+    # LOCAL_REPOS names may contain '-', which cannot appear in a variable name.
+    : "${LOCAL_REPO_URLS:=}"
+    declare -gA LOCAL_REPO_URL=()
+    local pair rname rurl
+    # shellcheck disable=SC2086
+    for pair in $LOCAL_REPO_URLS; do
+        [[ $pair == *=* ]] ||
+            die "$conf: LOCAL_REPO_URLS entry '$pair' is not name=url"
+        rname="${pair%%=*}"
+        rurl="${pair#*=}"
+        [[ -n $rurl ]] || die "$conf: LOCAL_REPO_URLS entry '$rname' has no URL"
+        case " $LOCAL_REPOS " in
+            *" $rname "*) ;;
+            *) die "$conf: LOCAL_REPO_URLS names '$rname', which is not in LOCAL_REPOS" ;;
+        esac
+        LOCAL_REPO_URL[$rname]="$rurl"
     done
 
     [[ $MOUNT_POINT == /* ]] || die "$conf: MOUNT_POINT must be an absolute path"
@@ -207,6 +230,12 @@ ensure_bot_workspace() {
             fi
             mv -- "$old" "$dest" || die "could not move $old to $dest"
             ok "moved $old -> $dest"
+        elif [[ -n ${LOCAL_REPO_URL[$repo]:-} ]]; then
+            if git clone -- "${LOCAL_REPO_URL[$repo]}" "$dest"; then
+                ok "cloned $repo -> $dest"
+            else
+                warn "could not clone ${LOCAL_REPO_URL[$repo]} -- clone $repo to $dest by hand"
+            fi
         else
             warn "clone $repo to $dest"
         fi

@@ -26,6 +26,7 @@ means one of the two is a typo and guessing which is worse than stopping.
 | `SOURCE_CMD` | no | unset | Sourced before every `bot run` command. |
 | `SEARCH_EXCLUDE` | no | see below | Paths under the mount the agent must not search. |
 | `LOCAL_REPOS` | no | empty | Space-separated names of laptop clones under `~/dev/<name>/`. The GUI is the usual case. Not mounts. Names `mount`, `notes`, and `docs` are reserved. |
+| `LOCAL_REPO_URLS` | no | empty | Space-separated `name=url` pairs, one per `LOCAL_REPOS` entry to auto-clone. See below. |
 
 The file is sourced by bash, so `$HOME` and earlier variables expand. That is why
 `SOURCE_CMD` can refer to `$REMOTE_WS`, as long as `REMOTE_WS` is set above it.
@@ -89,8 +90,9 @@ Optional. Space-separated directory names under `~/dev/<BOT_NAME>/`. Each
 name is a laptop clone that belongs with this robot. A GUI is the usual
 case.
 
-You clone the repo yourself into the project folder `bot up` created. botkit
-does not create it, does not mount it, and does not put it on the robot.
+You clone the repo yourself into the project folder `bot up` created, or let
+`bot up` do it with `LOCAL_REPO_URLS` below. Either way, botkit never mounts
+it and never puts it on the robot.
 
 ```
 git clone <gui-url> ~/dev/robot/gui
@@ -115,6 +117,33 @@ clone to read, not repos that belong with one robot. It is not a
 
 `bot up` seeds `~/dev/notes/<repo>/` for each entry. The generated block in
 `AGENTS.md` names the link. Start the agent from `~/dev/<bot>/`.
+
+### `LOCAL_REPO_URLS`
+
+Optional. Pairs `LOCAL_REPOS` names with clone URLs, so a bot conf carries
+everything a teammate's `bot up` needs to reconstruct the GUI clone, not
+just the robot connection:
+
+```
+LOCAL_REPOS=gui
+LOCAL_REPO_URLS=gui=https://github.com/you/gui
+```
+
+`bot up` clones a URL only when nothing already sits at
+`~/dev/<bot>/<name>` and no leftover clone was found at the old
+`~/dev/<name>` location. It never re-clones, never pulls, and never
+overwrites work you already have there. A `LOCAL_REPOS` entry with no
+matching `LOCAL_REPO_URLS` pair behaves exactly as before: `bot up` prints
+the path and leaves the cloning to you.
+
+Several pairs, space-separated: `LOCAL_REPO_URLS="gui=<url> dashboard=<url>"`.
+A name here that isn't in `LOCAL_REPOS`, or a pair missing its `=url`, is a
+config error `bot up` refuses to run past.
+
+This is the field that makes a bot conf worth handing to a teammate as-is.
+`BOT_HOST`, `BOT_USER`, `REMOTE_MOUNT`, and the rest already describe a
+robot the team shares; `LOCAL_REPO_URLS` is what turns "here's the config"
+into "here's the config, and your first `bot up` sets up the GUI too."
 
 ## What `install.sh` writes, per adapter
 
