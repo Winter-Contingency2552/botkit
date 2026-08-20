@@ -1,17 +1,25 @@
-# The notes repo is its own git repo, kept entirely out of this one.
-# Two repos, no nesting, no submodules.
-notes/
+# Deny by default. Only the framework is visible to git.
+# Anything else dropped in this checkout (real bot configs, scratch,
+# agent state, probe notes, CONTEXT.md) stays out.
 
-# Bot configs are yours. bots/.gitignore handles the exception for example.conf.
+/*
+!/.gitignore
+!/README.md
+!/install.sh
+!/uninstall.sh
+!/LICENSE
+!/LICENSE.md
 
-# Editor and OS noise
-*.swp
-*~
-.DS_Store
-.idea/
-.vscode/
+!/docs/
+!/hooks/
+!/lib/
+!/scripts/
+!/skills/
+!/templates/
+!/bots/
 
-# Scratch
-*.tmp
-*.bak
-scratch/
+# bots/ is the exception inside the exception: real configs live here,
+# and only the template is framework.
+/bots/*
+!/bots/.gitignore
+!/bots/example.conf

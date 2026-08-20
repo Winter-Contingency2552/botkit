@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Block real bot configs and agent state from landing in the public repo.
+# Installed as .git/hooks/pre-commit by install.sh. Safe to run by hand:
+#   git diff --cached --name-only | ./hooks/pre-commit
+set -euo pipefail
+
+fail=0
+while IFS= read -r f; do
+    [[ -n $f ]] || continue
+    case "$f" in
+        bots/example.conf) ;;
+        bots/*.conf)
+            printf 'error: refusing to commit %s\n' "$f" >&2
+            printf '  real bot configs are gitignored. copy example.conf, do not add -f\n' >&2
+            fail=1
+            ;;
+        .claude/*|.cursor/*|.codex/*|.agents/*)
+            printf 'error: refusing to commit %s\n' "$f" >&2
+            printf '  agent state does not belong in this repo\n' >&2
+            fail=1
+            ;;
+        notes/*)
+            printf 'error: refusing to commit %s\n' "$f" >&2
+            printf '  notes live in ~/dev/notes, not in botkit\n' >&2
+            fail=1
+            ;;
+    esac
+done < <(git diff --cached --name-only)
+
+exit "$fail"

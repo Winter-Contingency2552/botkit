@@ -355,10 +355,10 @@ cp bots/example.conf bots/robot.conf   # set BOT_HOST and BOT_USER, leave REMOTE
 12. **`wiring` on a repo that is not a robot.** Run it against the GUI. It must
     go static without complaining that a robot is missing.
 13. **Search latency.** Run the timed comparison from `docs/SETUP.md`, with and
-    without the exclusions, and **write both numbers into the table there**. That
-    table currently says TBD. If the excluded case is still slow, that robot
-    should mount its workspace instead of its home directory, and the reason goes
-    in its `decisions.md`.
+    without the exclusions, and write both numbers into that robot's
+    `~/dev/notes/<name>/decisions.md`. Not into SETUP.md. If the excluded case
+    is still slow, that robot should mount its workspace instead of its home
+    directory, and the reason goes in the same `decisions.md`.
 14. **The exclusions actually bite.** With the bot mounted, ask the agent to
     search for something that only exists under `build/` or in a `.bag`. On
     Claude Code the deny rule should block it. On an agent where the rule is only
@@ -373,8 +373,9 @@ cp bots/example.conf bots/robot.conf   # set BOT_HOST and BOT_USER, leave REMOTE
 ### What to do with the results
 
 Record them in `~/dev/notes/botkit/progress.md`, and anything that turned out to
-be a design decision rather than a result in `decisions.md`. If a check fails,
-fix botkit rather than relaxing the check.
+be a design decision rather than a result in `decisions.md`. Do not write those
+results into this file. This file is public. If a check fails, fix botkit
+rather than relaxing the check.
 
 ## How to work in this repo
 

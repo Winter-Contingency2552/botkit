@@ -26,7 +26,8 @@ usage: bot <command> [args]
   bot status [name]        list configured bots and whether each is reachable/mounted
   bot probe <name>         report the robot's layout so you can choose REMOTE_MOUNT
 
-Bot configs live in bots/<name>.conf. Start from bots/example.conf.
+Bot configs live in bots/<name>.conf. Copy bots/example.conf. Do not edit
+example.conf. That file is tracked and would publish whatever you put in it.
 USAGE
 }
 
@@ -316,9 +317,10 @@ There is no default. Weigh it for this robot:
     work spans more than one workspace. It costs search breadth, which
     SEARCH_EXCLUDE has to contain.
 
-Whichever you pick, write down why in ~/dev/notes/$name/decisions.md. The next
-person to look at this — including the next agent — cannot recover the reason
-from the config file alone.
+Whichever you pick, write down why in ~/dev/notes/$name/decisions.md, along
+with the timed search counts from docs/SETUP.md after the bot is mounted.
+Not in the botkit checkout. The next person to look at this, including the
+next agent, cannot recover the reason from the config file alone.
 EOF
 }
 
@@ -329,6 +331,13 @@ main() {
     [[ $# -gt 0 ]] && shift
 
     case "$cmd" in
+        help|-h|--help)  usage; return 0 ;;
+        '')              usage >&2; exit 2 ;;
+    esac
+
+    check_no_tracked_real_bot_confs
+
+    case "$cmd" in
         up)              cmd_up "$@" ;;
         down)            cmd_down "$@" ;;
         run)             cmd_run "$@" ;;
@@ -336,8 +345,6 @@ main() {
         notes)           [[ -n ${1:-} ]] || die "usage: bot notes <name>"; seed_notes "$1" ;;
         status)          cmd_status "$@" ;;
         probe)           cmd_probe "$@" ;;
-        help|-h|--help)  usage ;;
-        '')              usage >&2; exit 2 ;;
         *)               printf 'unknown command: %s\n\n' "$cmd" >&2; usage >&2; exit 2 ;;
     esac
 }

@@ -33,6 +33,9 @@ differs.
 
 Decision: <workspace path or home directory>
 
+Search, full tree: <`rg --files` count and time>
+Search, with SEARCH_EXCLUDE: <count and time>
+
 Rejected: <the other one>, because <the probe numbers or the layout reason>.
 
 Consequence:

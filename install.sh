@@ -91,6 +91,8 @@ preflight() {
             note_manual "add to ~/.bashrc:  export PATH=\"\$HOME/.local/bin:\$PATH\""
             ;;
     esac
+
+    check_no_tracked_real_bot_confs
 }
 
 # ------------------------------------------------------------- workspace ----
@@ -152,6 +154,28 @@ install_bot() {
     ln -sfn -- "$src" "$target" || die "could not create $target"
     ok "$target -> $src"
     note_change "installed bot -> $src"
+}
+
+install_precommit_hook() {
+    local src="$HOOKS_DIR/pre-commit" dest="$BOTKIT_ROOT/.git/hooks/pre-commit"
+    [[ -d $BOTKIT_ROOT/.git/hooks ]] || return 0
+
+    step "Installing git pre-commit hook"
+    chmod +x -- "$src" 2>/dev/null || true
+
+    if [[ -L $dest && "$(readlink -f -- "$dest")" == "$(readlink -f -- "$src")" ]]; then
+        skip "pre-commit hook already points at this checkout"
+        return 0
+    fi
+    if [[ -e $dest || -L $dest ]]; then
+        warn "pre-commit hook already exists — not overwriting"
+        note_manual "ln -sfn -- $src $dest   # blocks real bot confs from being committed"
+        return 0
+    fi
+    acting "symlink $dest -> $src" || return 0
+    ln -sfn -- "$src" "$dest" || die "could not install pre-commit hook"
+    ok "pre-commit hook -> $src"
+    note_change "installed git pre-commit hook"
 }
 
 # ---------------------------------------------------------------- skills ----
@@ -343,6 +367,7 @@ main() {
     preflight
     init_notes
     install_bot
+    install_precommit_hook
 
     select_agents
 
@@ -427,9 +452,11 @@ main() {
     fi
     cat <<EOF
   - Add a robot:  cp bots/example.conf bots/<name>.conf
+                  # gitignored. do not commit it. do not edit example.conf.
                   bot probe <name>      # then choose REMOTE_MOUNT yourself
                   bot up <name>
-  - Start the agent from ~/dev, not from a repo below it.
+  - Start the agent from ~/dev, not from a repo below it, and not from this
+    checkout.
 
 Keep this checkout where it is: ~/.local/bin/bot and the settings hook both
 point at $BOTKIT_ROOT. If you move it, re-run ./install.sh.

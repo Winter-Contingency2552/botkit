@@ -18,6 +18,9 @@ architecture and decisions notes exactly as much as a robot does. If the GUI
 belongs with a robot, list it in that bot's `LOCAL_REPOS` so the generated
 `AGENTS.md` block names the link.
 
+Hostnames, mount paths, probe output, and search timings live here. They do
+not go in the botkit checkout. That repo is public.
+
 ## Assume this becomes shared
 
 The likely next step is a private repo the team pools notes into, so that

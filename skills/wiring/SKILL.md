@@ -170,7 +170,8 @@ node that was meant to be merged into another.
 
 If another robot already has notes, read those too. They live under
 `~/dev/notes/` on this laptop; that robot does not have to be mounted. Reuse
-what still applies, and write what differs into this repo's `decisions.md`.
+what still applies, and write what differs into
+`~/dev/notes/<repo>/decisions.md`.
 
 **That contradiction is worth more than the map.** Lead with it.
 

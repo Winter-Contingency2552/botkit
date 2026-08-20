@@ -144,7 +144,8 @@ connectivity reasons, stop and report.** That is the whole procedure.
   reused, and what differs, in this robot's notes.
 - **Do not pick `REMOTE_MOUNT` by guessing.** Run `bot probe <name>`, read the
   layout and search-cost numbers it reports for that robot, choose deliberately,
-  and record the reason in `notes/<name>/decisions.md`.
+  and record the reason in `notes/<name>/decisions.md`. Timed search counts go
+  in that same file. Never in the botkit checkout.
 - **A GUI that belongs with a bot lives at `~/dev/<repo>/`.** Same for any other
   laptop clone. List it in that bot's `LOCAL_REPOS`. The generated block in
   `AGENTS.md` names the link. Never clone into a mount.

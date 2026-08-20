@@ -89,6 +89,27 @@ list_bots() {
     shopt -u nullglob
 }
 
+# example.conf is the tracked template. Using it as a live bot would put a
+# real host in a file git is willing to commit.
+check_not_example_bot() {
+    [[ $1 != example ]] ||
+        die "example.conf is the tracked template. Copy it to bots/<name>.conf and use that name"
+}
+
+# Die if a real bot conf is tracked in this checkout. gitignore is the fence;
+# this is the alarm if the fence was climbed.
+check_no_tracked_real_bot_confs() {
+    local f base
+    command -v git >/dev/null 2>&1 || return 0
+    [[ -d $BOTKIT_ROOT/.git ]] || return 0
+    while IFS= read -r f; do
+        [[ -n $f ]] || continue
+        base="$(basename -- "$f")"
+        [[ $base == example.conf ]] && continue
+        die "tracked bot config $f — that publishes a hostname. Untrack it with: git rm --cached -- $f"
+    done < <(git -C "$BOTKIT_ROOT" ls-files -- 'bots/*.conf')
+}
+
 # Source bots/<name>.conf and validate it. Sets the BOT_* variables in the
 # caller's shell. Dies on anything malformed rather than half-configuring.
 load_bot_conf() {
@@ -96,6 +117,7 @@ load_bot_conf() {
 
     [[ $name =~ ^[A-Za-z0-9_-]+$ ]] ||
         die "invalid bot name '$name' (allowed: letters, digits, dash, underscore)"
+    check_not_example_bot "$name"
 
     conf="$BOTS_DIR/$name.conf"
     [[ -f $conf ]] ||

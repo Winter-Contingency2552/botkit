@@ -11,16 +11,16 @@ Ubuntu with bash. No macOS, no zsh.
 | `git` | `sudo apt install git` | the notes repo, fetching skills |
 | `ssh` | `sudo apt install openssh-client` | running commands on the robot |
 
-`install.sh` checks those four and names every missing one at once rather than
-failing on the first. Agents are detected separately. If none is found, that is
-a warning, not an error: the installer writes `AGENTS.md`, installs `bot`, and
-says which agents it looked for.
+`install.sh` checks those four and names every missing one at once. It does
+not stop at the first hole. Agents are a separate check. Missing every agent
+is still a successful install. The script writes `AGENTS.md`, installs `bot`,
+and reports which agents it looked for.
 
-You also want key-based ssh to each robot. `bot` runs ssh with `BatchMode=yes`,
-so a password prompt is a failure, not a prompt.
+You also want key-based ssh to each robot. `bot` runs ssh with `BatchMode=yes`.
+A password prompt is a failure.
 
 ```bash
-ssh-copy-id team@robot.local
+ssh-copy-id user@robot.local
 ```
 
 ## Install
@@ -31,25 +31,29 @@ cd ~/botkit
 ./install.sh
 ```
 
+Keep it at `~/botkit`, not under `~/dev`. An agent rooted at `~/dev` would see
+this checkout as just another project and might write hostnames and probe
+output into it.
+
 Options:
 
 | Flag | Effect |
 |---|---|
 | `--dry-run` | report what would change, change nothing |
-| `--no-skills` | skip every third-party skill download (offline install) |
+| `--no-skills` | skip every third-party skill download. Use this offline. |
 | `--no-plugins` | skip the mattpocock marketplace step |
 | `--agent NAME` | configure only this adapter, plus the generic layer |
 
-**Keep the checkout where you put it.** `~/.local/bin/bot` is a symlink into it,
-and hook paths in agent config are absolute. Moving the directory breaks
-both; re-run `./install.sh` afterwards and it repairs them.
+**Keep the checkout where you put it.** `~/.local/bin/bot` is a symlink into
+it, and hook paths in agent config are absolute. Move the directory and both
+break. Re-run `./install.sh` afterwards and it repairs them.
 
 If `~/.local/bin` is not on your `PATH`, the installer says so and prints the
 line to add.
 
 ### The plugin step
 
-`install.sh` uses the non-interactive path when your `claude` build has one:
+`install.sh` uses the non-interactive path when your `claude` build has one.
 
 ```bash
 claude plugin marketplace add mattpocock/skills
@@ -57,9 +61,9 @@ claude plugin install mattpocock-skills@mattpocock -y --scope user
 ```
 
 The marketplace is named `mattpocock`, not `skills`, so the id is
-`mattpocock-skills@mattpocock`. If either command fails or your build has no
-`plugin marketplace` subcommand, the installer says so and prints these to paste
-into a Claude Code session instead:
+`mattpocock-skills@mattpocock`. If either command fails, or your build has no
+`plugin marketplace` subcommand, the installer prints these to paste into a
+Claude Code session:
 
 ```
 /plugin marketplace add mattpocock/skills
@@ -71,70 +75,92 @@ Skip the whole step with `--no-plugins`.
 ## Restart or reload, per agent
 
 **Claude Code.** Restart after a first install. It watches `~/.claude/skills/`
-for changes and normally picks up new skills live, without a restart, but only
-if that directory existed when the session started. On a first install it does
-not exist, so nothing is watching it. Check with `/context` or `/skills`
-afterwards. Plugin changes need a restart or `/reload-plugins`.
+and picks up new skills without a restart, if that directory already existed
+when the session started. On a first install it does not exist, so nothing is
+watching. Check with `/context` or `/skills` afterwards. Plugin changes need
+a restart or `/reload-plugins`.
 
-**Cursor.** Reload or restart after a first install so it sees `~/.cursor/skills/`.
-Hooks in `~/.cursor/hooks.json` reload on their own.
+**Cursor.** Reload or restart after a first install so it sees
+`~/.cursor/skills/`. Hooks in `~/.cursor/hooks.json` reload on their own.
 
 **Codex.** Restart after a first install so it sees `~/.agents/skills/`. Trust
-the new PostToolUse hook with `/hooks` before it will run; untrusted hooks are
-skipped.
+the new PostToolUse hook with `/hooks` before it will run. Untrusted hooks
+are skipped.
 
 **Unknown agent.** There is nothing to reload. Read `~/dev/AGENTS.md`.
 
 ## Your first bot
 
 ```bash
-cp bots/example.conf bots/mybot.conf
+cp bots/example.conf bots/robot.conf
 ```
 
+The copy is gitignored. Do not commit it, and do not `git add -f` it. Do not
+edit `example.conf` itself; that file is tracked. Real hosts, usernames, and
+mount paths stay out of this repo.
+
 Edit three fields. Leave `REMOTE_MOUNT` empty for now. If this robot has a GUI
-you clone onto the laptop, that is `LOCAL_REPOS`, covered after `bot up`.
+you clone onto the laptop, that is `LOCAL_REPOS`, after `bot up`.
 
 | Field | What to put |
 |---|---|
-| `BOT_NAME` | Same as the filename. `bots/myrobot.conf` means `BOT_NAME=myrobot`. This is a local nickname, not a login. |
+| `BOT_NAME` | Same as the filename. `bots/robot.conf` means `BOT_NAME=robot`. A local nickname. Not a login. |
 | `BOT_HOST` | Whatever you put after `@` in `ssh`. Hostname, `hostname.local`, or an IP. See below. |
 | `BOT_USER` | The Linux account on the robot, the part before `@` on the robot's prompt. Often a shared account, not the username on this laptop. |
 
 ### Reading the robot's prompt
 
-A typical prompt is `user@hostname`. If the robot shows `myrobot@mybot10`:
+A typical prompt is `user@hostname`. If the robot shows `user@robot`:
 
 | Prompt | Field | Value |
 |---|---|---|
-| `myrobot` (before `@`) | `BOT_USER` | `myrobot` |
-| `mybot10` (after `@`) | `BOT_HOST` | `mybot10`, or `mybot10.local`, or the IP |
-| (you pick) | `BOT_NAME` | usually `mybot10`, matching `bots/mybot10.conf` |
+| `user`, before `@` | `BOT_USER` | `user` |
+| `robot`, after `@` | `BOT_HOST` | `robot`, or `robot.local`, or the IP |
+| you pick | `BOT_NAME` | usually `robot`, matching `bots/robot.conf` |
 
 On the robot, `whoami` is `BOT_USER` and `hostname` is the machine's name.
 
-**`.local` is not added by botkit.** It is mDNS (Avahi on Ubuntu, Bonjour on Mac). A machine named `mybot10` can advertise itself as `mybot10.local` on the LAN so you do not need a DNS server. Use whichever form actually reaches the robot from the laptop:
+### SSH
+
+**The name is looked up.** `robot` and `robot.local` are names. `ping` and `ssh`
+ask the network who that is and get an IP back. `.local` is mDNS. On Ubuntu
+that is Avahi. The robot announces `robot.local` on the LAN and the laptop
+hears it. No DNS server. No `/etc/hosts` line. botkit does not add `.local`.
 
 ```bash
-ping -c1 mybot10
-ping -c1 mybot10.local
+ping -c1 robot
+ping -c1 robot.local
 ```
 
-Whichever one replies is `BOT_HOST`. If both fail, use the IP. `BOT_HOST` is just the string you put after `ssh user@`.
+Whichever one replies is `BOT_HOST`. If both fail, use the IP. `BOT_HOST` is
+the string after `ssh user@`. Every later `ssh` and `sshfs` still hits that
+looked-up address. A name keeps working when the robot gets a new address. A
+hardcoded IP often does not. That is why the extra ping is worth it.
 
-You need key-based ssh as that user before `bot probe` will work:
+**A key replaces the password.** The laptop has a key pair under
+`~/.ssh/`. `ssh-copy-id` logs in with the account password once and appends
+your public key to `~/.ssh/authorized_keys` on the robot. After that, ssh
+proves you hold the matching private key. The private key never leaves the
+laptop.
+
+`bot` runs ssh with `BatchMode=yes`. It will not prompt. It fails. A password
+prompt would hang the agent, so keys are required.
 
 ```bash
-ssh-copy-id myrobot@mybot10        # or myrobot@mybot10.local
-ssh myrobot@mybot10 true           # must succeed without a password
+ssh-copy-id user@robot        # or user@robot.local. Password, once.
+ssh user@robot true           # must succeed with no password
 ```
+
+If `ping` fails, put the IP in `BOT_HOST`. If `ssh ... true` asks for a
+password, you skipped `ssh-copy-id`.
 
 ### Choosing REMOTE_MOUNT
 
-There is no default, on purpose. What to mount depends on how that robot is laid
-out, and a bad guess is paid for on every search you ever run against it.
+There is no default, on purpose. What to mount depends on how that robot is
+laid out. A bad guess is paid for on every search you ever run against it.
 
 ```bash
-bot probe mybot
+bot probe robot
 ```
 
 That connects over ssh, writes nothing to the robot, and reports:
@@ -146,126 +172,126 @@ That connects over ssh, writes nothing to the robot, and reports:
 - how many files a recursive search would walk, with and without the artifact
   directories
 
-Then decide:
+Then decide.
 
-- **A workspace** (`/home/team/ws`) keeps searches fast and scoped. Right when
-  the probe shows a large home directory, a lot of recorded data, or work that
-  only ever happens in one place.
-- **The home directory** (`/home/team`) is robust when you do not know the
-  layout yet, when config outside the workspace matters, or when work spans
-  several workspaces. It costs search breadth, which `SEARCH_EXCLUDE` contains.
+**A workspace, `/home/user/ws`.** Search only walks that tree. Use this when
+the probe shows a large home directory, a lot of recorded data, or work that
+only ever happens in one place.
 
-Put the answer in `REMOTE_MOUNT` and the reason in
-`~/dev/notes/mybot/decisions.md`. The config file records what you chose; only
+**The home directory, `/home/user`.** Covers config outside the workspace, and
+work that spans several workspaces. Also the honest choice when you do not
+know the layout yet. The cost is search breadth. Widen `SEARCH_EXCLUDE` until
+the timed comparison below is acceptable.
+
+Put the path in `REMOTE_MOUNT` and the reason in
+`~/dev/notes/robot/decisions.md`. The config file records what you chose. Only
 the notes record why.
 
 ### Bring it up
 
 ```bash
-bot up mybot
+bot up robot
 ```
 
-Mounts it, seeds `~/dev/notes/mybot/` and notes for any `LOCAL_REPOS`, writes
+Mounts it. Seeds `~/dev/notes/robot/` and notes for any `LOCAL_REPOS`. Writes
 the search exclusions, regenerates the marked block in `AGENTS.md`, and prints
 the mount path. Running it twice is a no-op.
 
 ```bash
-bot run mybot -- ros2 topic list
-bot build mybot
+bot run robot -- ros2 topic list
+bot build robot
 bot status
-bot down mybot
+bot down robot
 ```
 
 ## A GUI that belongs with this robot
 
-Robot source stays on the robot, mounted at `~/dev/mybot/`. A GUI is the
+Robot source stays on the robot, mounted at `~/dev/robot/`. A GUI is the
 opposite. It runs on the laptop, so it is an ordinary git clone on the laptop.
 The agent still needs to know the two belong together.
 
-Clone it next to the mount, never inside it:
+Clone it next to the mount, never inside it.
 
 ```bash
 git clone <gui-url> ~/dev/gui
 ```
 
-`~/dev/gui` is a local repo. `~/dev/mybot` is the mount. Mixing those up writes
+`~/dev/gui` is a local repo. `~/dev/robot` is the mount. Mixing those up writes
 the GUI onto the robot's disk, which is the thing this whole layout exists to
 avoid.
 
-Then name it on the bot, in `bots/mybot.conf`:
+Then name it on the bot, in `bots/robot.conf`:
 
 ```
 LOCAL_REPOS=gui
 ```
 
-`gui` is the directory name under `~/dev`. That is the whole association. There
-is no other place to declare it. Several clones go in one value,
-`LOCAL_REPOS="gui dashboard"`. A name cannot be `mybot`, because that path is
+`gui` is the directory name under `~/dev`. That is the whole association.
+There is no other place to declare it. Several clones go in one value,
+`LOCAL_REPOS="gui dashboard"`. A name cannot be `robot`, because that path is
 the mount.
 
-Bring the bot up again, or for the first time:
+Bring the bot up again, or for the first time.
 
 ```bash
-bot up mybot
+bot up robot
 ```
 
-That seeds `~/dev/notes/gui/` the same way it seeds `~/dev/notes/mybot/`, and
+That seeds `~/dev/notes/gui/` the same way it seeds `~/dev/notes/robot/`, and
 writes a line into the generated block of `~/dev/AGENTS.md`:
 
 ```
-- `gui` belongs with bot `mybot` (at `~/dev/gui`). Notes: `notes/gui/`.
+- `gui` belongs with bot `robot` (at `~/dev/gui`). Notes: `notes/gui/`.
 ```
 
-Start the agent from `~/dev`. One session rooted there sees the GUI, the mount,
-and both notes directories. When the task is the robot, it should read the GUI
-too. When the task is the GUI, it should read the robot.
+Start the agent from `~/dev`. One session there sees the GUI, the mount, and
+both notes directories. When the task is the robot, read the GUI too. When the
+task is the GUI, read the robot.
 
-`bot notes gui` works even without a bot config, if you want notes before the
-link is declared.
+`bot notes gui` works even without a bot config. Use it if you want notes
+before the link is declared.
 
 ## Search latency
 
 Mounting a remote home means recursive search covers build artifacts, bags,
-logs, and model weights unless the exclusions hold. Measure it for each robot
-rather than assuming:
+logs, and model weights unless the exclusions hold. Measure it for each robot.
+Do not assume.
 
 ```bash
 # everything
-time rg --files ~/dev/mybot | wc -l
+time rg --files ~/dev/robot | wc -l
 
 # with the exclusions this bot actually uses
-time rg --files ~/dev/mybot \
+time rg --files ~/dev/robot \
   -g '!build' -g '!install' -g '!log' -g '!.ros' -g '!bags' \
   -g '!*.bag' -g '!*.mcap' -g '!*.pt' -g '!*.onnx' -g '!.cache' -g '!.git' | wc -l
 ```
 
-Record both numbers here, per robot:
-
-| Robot | REMOTE_MOUNT | Full tree | Excluded | Measured |
-|---|---|---|---|---|
-| _(none yet)_ | | TBD | TBD | |
+Record both numbers in that robot's `~/dev/notes/<name>/decisions.md`, next to
+the `REMOTE_MOUNT` reason. Not in this file. This repo is public. Robot names,
+mount paths, and how fat the tree is do not belong here.
 
 If the excluded case is still slow, that robot should be mounting its workspace
 instead of its home directory. Change `REMOTE_MOUNT`, `bot down` then `bot up`,
-and write down why in that robot's `decisions.md`.
+and write down why in the same `decisions.md`.
 
 ## Troubleshooting
 
 **`bot up` says unreachable.** The robot is off, off wifi, or out of range.
 Check the robot. This is the common case, not the exception.
 
-**`ls ~/dev/mybot` hangs forever.** The mount is wedged. The connection dropped
-while it was mounted. `bot status mybot` reports `stale` without hanging, because
-it reads `/proc/mounts` instead of touching the mount. Once the robot is back:
-`bot down -f mybot` then `bot up mybot`. Once.
+**`ls ~/dev/robot` hangs forever.** The mount is wedged. The connection dropped
+while it was mounted. `bot status robot` reports `stale` without hanging,
+because it reads `/proc/mounts` instead of touching the mount. Once the robot
+is back, `bot down -f robot` then `bot up robot`. Once.
 
 **`bot up` refuses because the mount point is not empty.** Something is already
-in `~/dev/mybot/` that is not a mount. Mounting over it would hide it. Look at
+in `~/dev/robot/` that is not a mount. Mounting over it would hide it. Look at
 what is there and move it before retrying.
 
 **`bot run` fails with "command not found" for a ROS tool.** `SOURCE_CMD` in the
-bot config is wrong for that robot. Check the ROS distro and the workspace path:
-`bot run mybot -- 'ls /opt/ros'`.
+bot config is wrong for that robot. Check the ROS distro and the workspace
+path with `bot run robot -- 'ls /opt/ros'`.
 
 **A password prompt appears.** ssh keys are not set up. `ssh-copy-id
 <user>@<host>`.
@@ -296,10 +322,10 @@ echo '{"tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** U
 ```
 
 **The agent does not see the skills after installing.** Restart or reload it.
-This is the expected behaviour on a first install, not a failure. See
+That is what a first install does. Not a failure. See
 [Restart or reload, per agent](#restart-or-reload-per-agent).
 
-Confirm they are on disk and well-formed in the meantime:
+Confirm they are on disk:
 
 ```bash
 ls ~/.claude/skills/ ~/.cursor/skills/ ~/.agents/skills/
@@ -309,7 +335,7 @@ cat ~/.agents/skills/.botkit-provenance
 ```
 
 **A skill is missing.** `install.sh` lists which skill directories exist at the
-end of every run. Re-run it; a network failure during the clone is the usual
+end of every run. Re-run it. A network failure during the clone is the usual
 cause. The provenance file in that agent's skills directory shows what was
 installed from where.
 

@@ -89,7 +89,11 @@ reasons means stop and report.** That is the entire procedure.
 
 `REMOTE_MOUNT` has no default. For a new robot, run `bot probe <name>`, read the
 layout and search-cost numbers it reports, choose, and record the reason in
-`notes/<name>/decisions.md`.
+`notes/<name>/decisions.md`. After it is mounted, run the timed `rg` from
+botkit's `docs/SETUP.md` and put both counts in the same file.
+
+Never write those numbers, the probe output, or a hostname into the botkit
+checkout. That repo is public. Notes are not.
 
 ## Nothing AI-related on the robot
 

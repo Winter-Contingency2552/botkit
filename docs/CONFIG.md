@@ -5,9 +5,10 @@ writes for each detected agent.
 
 ## `bots/<name>.conf`
 
-Shell-sourceable `KEY=value`, no logic. One file per robot. `bots/.gitignore`
-ignores every `*.conf` except `example.conf`, so your real configs stay out of
-the public repo.
+Shell-sourceable `KEY=value`, no logic. One file per robot. The checkout
+gitignore denies everything except the framework, and from `bots/` that is
+only `example.conf`. `bots/.gitignore` repeats the local half of that, so
+looking in this directory is enough. Do not `git add -f` a real conf.
 
 The filename is authoritative: `bots/robot.conf` must set
 `BOT_NAME=robot`. `bot` refuses to run if they disagree, because a mismatch
@@ -35,8 +36,13 @@ A robot prompt like `user@robot` is `BOT_USER@hostname`. `BOT_USER` is
 the Linux login (`whoami` on the robot). `BOT_HOST` is whichever of `hostname`,
 `hostname.local`, or an IP actually answers from the laptop (`ping -c1` each).
 
-`.local` is mDNS (Avahi on Ubuntu), not a botkit suffix. Use it only when that
+`.local` is mDNS. Avahi on Ubuntu, not a botkit suffix. Use it only when that
 form is the one that pings. An IP is always valid.
+
+The laptop still connects to an IP. The name is looked up. Login is by SSH key,
+not a typed password. `ssh-copy-id` copies your public key to the robot once.
+`bot` then uses `BatchMode=yes` and will not prompt. The two checks, and what
+each failure means, are in [SETUP.md](SETUP.md#how-ssh-works-without-an-ip-or-a-password).
 
 `BOT_NAME` is not in the prompt. It is the local nickname and must match the
 config filename.
