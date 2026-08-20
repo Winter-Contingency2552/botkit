@@ -108,6 +108,11 @@ name, and cannot be `mount`, `notes`, or `docs`.
 If a leftover clone still sits at `~/dev/gui` from an older layout, `bot up`
 moves it into `~/dev/<bot>/gui`.
 
+Not the same thing as `~/dev/references/`: that directory holds repos you
+clone to read, not repos that belong with one robot. It is not a
+`LOCAL_REPOS` entry and does not go in a bot conf. See
+[SETUP.md](SETUP.md#reference-clones).
+
 `bot up` seeds `~/dev/notes/<repo>/` for each entry. The generated block in
 `AGENTS.md` names the link. Start the agent from `~/dev/<bot>/`.
 

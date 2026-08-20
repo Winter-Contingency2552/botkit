@@ -140,6 +140,21 @@ init_notes() {
         warn "initial commit in ~/dev/notes failed — commit by hand"
 }
 
+init_references() {
+    step "Setting up ~/dev/references"
+    local src="$TEMPLATES_DIR/references/README.md"
+
+    acting "create $REFERENCES_DIR" && mkdir -p -- "$REFERENCES_DIR"
+
+    if [[ -e "$REFERENCES_DIR/README.md" ]]; then
+        skip "references/README.md exists"
+    elif acting "write references/README.md"; then
+        cp -- "$src" "$REFERENCES_DIR/README.md"
+        ok "wrote references/README.md"
+        note_change "seeded ~/dev/references/README.md"
+    fi
+}
+
 install_bot() {
     step "Installing the bot command"
     local target="$BIN_DIR/bot" src="$BOTKIT_ROOT/scripts/bot"
@@ -366,6 +381,7 @@ main() {
     BOTKIT_INSTALLING=1
     preflight
     init_notes
+    init_references
     install_bot
     install_precommit_hook
 

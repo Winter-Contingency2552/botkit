@@ -101,6 +101,7 @@ this laptop. botkit stays at `~/botkit`, next to it, never inside it.
   AGENTS.md               rules for every bot. Each project folder symlinks this.
   CLAUDE.md               symlink to AGENTS.md
   notes/                  its own git repo. One directory per robot or local clone.
+  references/             other people's repos, cloned here to read. Shared, not per-bot.
   robot/                  laptop project. Created by `bot up robot`. Not a mount.
     mount/                sshfs. The robot's disk.
     gui/                  a laptop clone, if LOCAL_REPOS=gui
@@ -328,6 +329,22 @@ GUI, read the robot.
 
 `bot notes gui` works even without a bot config. Use it if you want notes
 before the link is declared.
+
+## Reference clones
+
+`install.sh` also creates `~/dev/references/`, empty except for a short
+README. Use it for repos you want to read from, not build: "implement it
+kind of like this one did."
+
+```bash
+git clone <url> ~/dev/references/some-project
+```
+
+It differs from a GUI clone in `LOCAL_REPOS` in one way: it is not tied to
+a bot. One `~/dev/references/` serves every robot on the laptop, because the
+repo worth borrowing from rarely matches whichever robot you're working on
+that day. Nothing here is mounted, built, or run, and nothing here goes onto
+a robot without you saying so explicitly.
 
 ## Search latency
 
